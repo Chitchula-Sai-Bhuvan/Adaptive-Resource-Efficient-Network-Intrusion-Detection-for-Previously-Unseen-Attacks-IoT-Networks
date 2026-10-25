@@ -1,0 +1,48 @@
+\chapter{Conclusion and Future Research Directions}
+\label{chap:conclusion}
+
+\section{Summary of Research Findings}
+As Internet of Things (IoT) ecosystems become the backbone of critical infrastructure, industrial automation, and smart urban environments, the vulnerability of static machine learning security models to emerging zero-day threats poses an existential risk. This thesis investigated the fundamental limitations of closed-world supervised Network Intrusion Detection Systems (NIDS) and formulated an autonomous, resource-efficient Continual Learning framework tailored for edge IoT environments.
+
+Through systematic empirical benchmarking on the real-world TON\_IoT intrusion dataset, this research yielded several seminal findings:
+\begin{enumerate}
+    \item \textbf{Validation of the Zero-Day Blindness:} Conventional supervised tree ensembles fail completely ($F1 = 0.000$) when deployed against unobserved attack vectors, validating the theoretical detection deficit and underscoring the urgent necessity of lifelong learning in network security.
+    \item \textbf{Debunking the Full Retraining Ceiling:} Full joint retraining—traditionally considered the optimal upper bound in continual learning—was shown to suffer from severe class imbalance when assimilating compact zero-day attacks, achieving an F1-score of only $0.6483$ on novel MITM traffic. By contrast, our resource-efficient replay framework achieved an F1-score of $0.9773$, demonstrating that balanced historical rehearsal is fundamentally superior to brute-force retraining.
+    \item \textbf{Uncovering the Volumetric Flaw of Static Buffers:} While a fixed static replay buffer ($k=100$ samples/class) provides near-perfect storage reduction ($>99.2\%$), it is acutely vulnerable to high-volume attacks (e.g., XSS and Backdoor). When novel attack volume substantially exceeds buffer capacity, maximum catastrophic forgetting spikes to nearly $40\%$.
+    \item \textbf{Empirical Triumph of Dynamic Allocation:} Our proposed volume-aware allocation rule, $k_{dynamic} = \max(k_{min}, \lfloor M / K \rfloor)$, dynamically neutralizes class imbalance during tree splitting, slashing maximum catastrophic forgetting by $35.8\%$ while sustaining extreme memory reductions ($96.8\%$ to $99.3\%$) and sub-0.085 second execution latencies.
+\end{enumerate}
+
+\section{Research Questions Revisited}
+The thesis systematically answered the five foundational research questions posed in Chapter~\ref{chap:introduction}:
+\begin{itemize}
+    \item \textbf{Answer to RQ1 (Supervised Failure Mode):} Supervised Random Forests achieve an exact $0.000$ detection F1-score on held-out attack classes, confirming that closed-world models are fundamentally incapable of recognizing zero-day threats without continual adaptation.
+    \item \textbf{Answer to RQ2 (Anomaly Detection Utility):} Isolation Forests effectively flag out-of-distribution traffic with linear computational complexity, but attain modest recall ($18.86\%$ on MITM) and high false alarm rates, confirming their utility strictly as front-end screening filters rather than standalone classifiers.
+    \item \textbf{Answer to RQ3 (Replay Memory Sensitivity):} Empirical sensitivity analysis established that a minimal buffer floor of $k=100$ samples per class ($900$ samples total) provides the optimal Pareto balance, reducing average forgetting by over $58\%$ relative to ultra-small buffers ($k=25$).
+    \item \textbf{Answer to RQ4 (Volumetric Attack Dynamics):} Static buffers fail under volumetric attacks because decision tree split optimization greedily minimizes overall impurity, allowing massive incoming novel classes to overwrite internal feature splits corresponding to minority historical classes.
+    \item \textbf{Answer to RQ5 (Dynamic Allocation Efficacy):} Dynamically scaling replay quotas proportionally to incoming novelty volume restores class parity during tree induction, successfully capping maximum forgetting below $0.25$ across all evaluated high-volume attack vectors.
+\end{itemize}
+
+\section{Validation of Research Hypotheses}
+The empirical results provide unequivocal validation for all four stated research hypotheses:
+\begin{itemize}
+    \item \textbf{Hypothesis H1 (Confirmed):} Baseline closed-world models yielded $F1 = 0.0000$ on all unobserved attack vectors.
+    \item \textbf{Hypothesis H2 (Confirmed):} Isolation Forest provided zero-day screening alerts but exhibited insufficient recall ($18.86\%$) for standalone deployment.
+    \item \textbf{Hypothesis H3 (Confirmed):} Memory overhead was reduced by $99.3\%$ without causing catastrophic legacy forgetting when maintaining a 100-sample/class floor.
+    \item \textbf{Hypothesis H4 (Confirmed):} Volume-aware dynamic allocation structurally suppressed maximum forgetting spikes on volumetric attacks by $35.8\%$ relative to fixed static buffers.
+\end{itemize}
+
+\section{Limitations of the Present Work}
+While demonstrating decisive improvements, several limitations characterize the present study:
+\begin{enumerate}
+    \item \textbf{Dataset Scope:} Evaluation was conducted primarily on the TON\_IoT benchmark. While highly representative of modern IoT telemetry, cross-dataset validation across other benchmarks (e.g., CIC-IoT-2023, Edge-IIoTset) would provide additional empirical generalization.
+    \item \textbf{Uniform Exemplar Selection:} The dynamic allocation rule currently selects historical exemplars via stratified random sampling. While statistically sound, uniform sampling does not prioritize boundary-critical samples near decision margins.
+    \item \textbf{Labeling Latency Assumption:} The pipeline assumes that out-of-distribution traffic flagged by Stage 1 is verified and assigned ground-truth labels by network telemetry or analysts prior to Stage 2 adaptation. In fully autonomous autonomous deployments, active learning or few-shot clustering would be required to minimize human labeling overhead.
+\end{enumerate}
+
+\section{Future Research Directions}
+Several promising avenues for extending this research include:
+\begin{enumerate}
+    \item \textbf{Coreset and Boundary-Aware Exemplar Selection:} Integrating geometric coreset selection or uncertainty-based margin sampling to populate the dynamic replay buffer with hard boundary exemplars, further pushing catastrophic forgetting toward zero.
+    \item \textbf{Federated Continual Learning across Edge Swarms:} Extending the dynamic replay mechanism to distributed federated architectures, enabling multiple IoT edge nodes to share localized threat exemplars without transmitting raw sensory telemetry over the network.
+    \item \textbf{Hardware Acceleration on Edge Microcontrollers:} Deploying and profiling the continual learning engine on physical bare-metal microcontrollers (e.g., ARM Cortex-M, ESP32, RISC-V edge cores) to evaluate hardware energy dissipation and battery longevity under sustained zero-day attack campaigns.
+\end{enumerate}

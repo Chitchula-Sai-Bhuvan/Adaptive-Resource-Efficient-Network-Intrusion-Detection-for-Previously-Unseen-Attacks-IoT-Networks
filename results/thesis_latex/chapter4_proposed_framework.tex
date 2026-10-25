@@ -1,0 +1,139 @@
+\chapter{Proposed Methodology: Dynamic Continual Learning Framework}
+\label{chap:proposed_framework}
+
+\section{Architecture Overview}
+The proposed architecture addresses the fundamental vulnerability of static Machine Learning-based Network Intrusion Detection Systems (NIDS) deployed in resource-constrained IoT environments: their complete blindness to novel zero-day attack vectors and the prohibitive cost of full offline retraining. 
+
+As illustrated in Figure~\ref{fig:framework_architecture}, the framework operates via a dual-stage closed-loop pipeline comprising:
+\begin{enumerate}
+    \item \textbf{Anomalous Vector Isolation (Stage 1):} High-entropy, out-of-distribution network packets are flagged without supervision using an Isolation Forest anomaly filter.
+    \item \textbf{Dynamic Continual Adaptation Engine (Stage 2):} Once confirmed and labeled by network telemetry, novel attack traffic is incrementally absorbed into the active classifier using our resource-efficient \textbf{Dynamic Replay Buffer}.
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\fbox{
+\begin{minipage}{0.9\textwidth}
+\centering
+\vspace{0.3cm}
+\textbf{\large Closed-Loop Dynamic Continual Learning Architecture}\\[0.3cm]
+$\mathbf{x}_t \longrightarrow$ \framebox{Stage 1: Isolation Forest Anomaly Screener} $\longrightarrow$ [Anomaly Flagged / Out-of-Distribution]\\
+$\downarrow$\\
+\framebox{Dynamic Quota Allocator: $k = \max(k_{min}, \lfloor M / K \rfloor)$} $\longleftarrow$ [Incoming Novel Batch $\mathcal{D}_{novel}$]\\
+$\downarrow$\\
+\framebox{Historical Exemplar Replay Buffer $\mathcal{B}_{dynamic}$} $\oplus$ \framebox{Novel Threat Batch $\mathcal{D}_{novel}$}\\
+$\downarrow$\\
+\framebox{Continual Retraining Engine: $\mathcal{D}_{adapt}$} $\longrightarrow$ \textbf{Updated Resilient Model $f_{\theta'}$}\\[0.3cm]
+\end{minipage}
+}
+\caption{Architectural block diagram of the proposed dual-stage adaptive intrusion detection framework, showcasing autonomous anomaly screening and volume-aware dynamic replay synthesis.}
+\label{fig:framework_architecture}
+\end{figure}
+
+\section{Stage 1: Unsupervised Zero-Day Anomaly Screening}
+The first stage of the defensive pipeline operates as an online anomaly filter directly on the ingress telemetry stream.
+
+\subsection{Isolation Forest Formulation}
+Let benign network traffic baseline samples be denoted as $\mathcal{X}_{benign} \subset \mathbb{R}^d$. An Isolation Forest comprising an ensemble of $T$ binary isolation trees $\{h_t\}_{t=1}^{T}$ is constructed. Each tree recursively splits the feature space by randomly selecting a feature dimension $j \in \{1, \dots, d\}$ and choosing a split value uniformly within the feature range $[x_{j}^{min}, x_{j}^{max}]$.
+
+The isolation anomaly score $s(\mathbf{x}, n)$ for an incoming flow $\mathbf{x}$ evaluated over a dataset of size $n$ is defined as:
+\begin{equation}
+s(\mathbf{x}, n) = 2^{-\frac{\mathbb{E}(h(\mathbf{x}))}{c(n)}}
+\end{equation}
+where $\mathbb{E}(h(\mathbf{x}))$ denotes the average path length across the $T$ isolation trees, and $c(n)$ is the average path length of unsuccessful searches in a Binary Search Tree (BST):
+\begin{equation}
+c(n) = 2 \ln(n - 1) + 0.5772156649 \text{ (Euler's constant)} - \frac{2(n - 1)}{n}
+\end{equation}
+
+When $s(\mathbf{x}, n) \rightarrow 1.0$, the sample is isolated near the root with short path lengths, indicating that the network packet exhibits abnormal statistical characteristics. Flows exceeding an empirical threshold $\tau_{anomaly}$ are isolated and routed to the quarantine adaptation queue.
+
+\section{Stage 2: Mathematical Formulation of Dynamic Replay}
+Let $\mathcal{D}_{train} = \{(\mathbf{x}_i, y_i)\}_{i=1}^{N}$ denote the historical baseline network dataset containing known traffic classes $\mathcal{C}_{known} = \{1, 2, \dots, K\}$. A base supervised classifier $f_{\theta}: \mathcal{X} \rightarrow \mathcal{C}_{known}$ is initially optimized on $\mathcal{D}_{train}$.
+
+When a novel attack vector $\mathcal{C}_{novel} = \{K+1\}$ appears in the IoT network, let $\mathcal{D}_{novel} = \{(\mathbf{x}_j, y_j)\}_{j=1}^{M}$ represent the incoming batch of novel attack signatures, where $M = |\mathcal{D}_{novel}|$.
+
+\subsection{The Memory Footprint Challenge in IoT Edge Nodes}
+Traditional continual learning either attempts full historical joint retraining on $\mathcal{D}_{train} \cup \mathcal{D}_{novel}$ (which requires maintaining $N \gg 10^5$ samples on local non-volatile storage) or relies on a small static buffer $\mathcal{B}_{static}$ containing a fixed quota $k_{static}$ samples per class ($|\mathcal{B}_{static}| = K \cdot k_{static}$). 
+
+As demonstrated by our empirical findings, when the incoming attack volume $M$ significantly exceeds the fixed buffer capacity ($M \gg K \cdot k_{static}$), the decision boundaries of the tree ensemble are overwhelmed by the new majority class, resulting in severe \textit{maximum catastrophic forgetting} on historical classes.
+
+\subsection{Dynamic Volume-Aware Replay Allocation Rule}
+To mathematically prevent class imbalance during incremental tree construction while strictly bounding memory consumption, we introduce the volume-aware Dynamic Replay Allocation function $\Phi(M, K)$:
+
+\begin{equation}
+k_{dynamic} = \max\left( k_{min}, \min\left( k_{max}, \left\lfloor \frac{M \cdot \alpha}{K} \right\rfloor \right) \right)
+\label{eq:dynamic_rule}
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item $k_{min}$ is the guaranteed retention floor ($k_{min} = 100$ samples per known class), preventing catastrophic forgetting on low-volume attacks.
+    \item $k_{max}$ is the physical hardware memory ceiling imposed by the IoT device's RAM/flash budget.
+    \item $K = |\mathcal{C}_{known}|$ is the total number of known classes currently managed by the model.
+    \item $\alpha \in [1.0, 1.2]$ is the class balance scaling multiplier, ensuring the historical buffer matches or slightly exceeds the incoming novelty volume in aggregate.
+\end{itemize}
+
+The dynamic historical replay buffer $\mathcal{B}_{dynamic}$ is then populated via stratified representative sampling:
+\begin{equation}
+\mathcal{B}_{dynamic} = \bigcup_{c \in \mathcal{C}_{known}} \mathcal{S}_{c}\left(\mathcal{D}_{train}^{(c)}, k_{dynamic}\right)
+\end{equation}
+where $\mathcal{S}_{c}(\cdot, k)$ extracts $k$ representative exemplars from historical class $c$.
+
+The updated model $f_{\theta'}$ is subsequently trained on the balanced adaptation set:
+\begin{equation}
+\mathcal{D}_{adapt} = \mathcal{B}_{dynamic} \cup \mathcal{D}_{novel}
+\end{equation}
+
+\section{Algorithmic Workflow}
+
+Algorithm~\ref{alg:dynamic_replay} details the exact operational execution flow executed on the edge gateway when novel threat signatures are assimilated.
+
+\begin{algorithm}[H]
+\caption{Dynamic Continual Learning Adaptation for IoT NIDS}
+\label{alg:dynamic_replay}
+\KwIn{Incoming novelty batch $\mathcal{D}_{novel}$, Historical repository $\mathcal{D}_{train}$, Known classes $\mathcal{C}_{known}$, Min buffer $k_{min}$, Max cap $k_{max}$}
+\KwOut{Adapted Multi-Class Model $f_{\theta'}$, Adaptation Metadata $\mathcal{M}$}
+
+$M \leftarrow |\mathcal{D}_{novel}|$\;
+$K \leftarrow |\mathcal{C}_{known}|$\;
+
+\tcp{Step 1: Compute Dynamic Allocation Quota}
+$k_{dynamic} \leftarrow \max\left( k_{min}, \min\left( k_{max}, \lfloor M / K \rfloor \right) \right)$\;
+
+\tcp{Step 2: Assemble Dynamic Replay Buffer}
+$\mathcal{B} \leftarrow \emptyset$\;
+\ForEach{$c \in \mathcal{C}_{known}$}{
+    $\mathcal{D}_c \leftarrow \{(\mathbf{x}, y) \in \mathcal{D}_{train} \mid y = c\}$\;
+    $\mathcal{B}_c \leftarrow \text{Sample}(\mathcal{D}_c, \min(k_{dynamic}, |\mathcal{D}_c|))$\;
+    $\mathcal{B} \leftarrow \mathcal{B} \cup \mathcal{B}_c$\;
+}
+
+\tcp{Step 3: Synthesize Balanced Adaptation Corpus}
+$\mathcal{D}_{adapt} \leftarrow \mathcal{B} \cup \mathcal{D}_{novel}$\;
+
+\tcp{Step 4: Execute Fast On-Device Retraining}
+$start\_time \leftarrow \text{GetCurrentTime}()$\;
+$f_{\theta'} \leftarrow \text{TrainEnsemble}(\mathcal{D}_{adapt})$\;
+$elapsed \leftarrow \text{GetCurrentTime}() - start\_time$\;
+
+\tcp{Step 5: Record Adaptation Metadata}
+$\mathcal{M} \leftarrow \{|\mathcal{B}|, \text{MemoryReduction}, elapsed\}$\;
+\Return{$f_{\theta'}, \mathcal{M}$}
+\end{algorithm}
+
+\section{Computational Complexity and Resource Efficiency for Edge Nodes}
+The computational complexity of standard Random Forest training on $N$ samples with $d$ features and $B$ trees is:
+\begin{equation}
+\mathcal{O}_{\text{full}} = B \cdot d \cdot N \log N
+\end{equation}
+Under our Dynamic Replay framework, the effective sample volume during adaptation is reduced from $N \approx 1.28 \times 10^5$ to $N_{adapt} = |\mathcal{B}_{dynamic}| + M \approx 1.8 \times 10^3 \text{ to } 7.5 \times 10^3$.
+
+The computational complexity under adaptation reduces to:
+\begin{equation}
+\mathcal{O}_{\text{dynamic}} = B \cdot d \cdot N_{adapt} \log N_{adapt}
+\end{equation}
+Because $N_{adapt} \ll N$, this represents a theoretical speedup exceeding an order of magnitude:
+\begin{equation}
+\text{Speedup} \approx \frac{N \log N}{N_{adapt} \log N_{adapt}} \approx 10\times \text{ to } 25\times
+\end{equation}
+This theoretical reduction directly manifests in our empirical runtimes, where model adaptation completes in under $0.085$ seconds on edge CPU hardware.

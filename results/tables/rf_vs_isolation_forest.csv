@@ -1,0 +1,4 @@
+Metric,Random Forest,Isolation Forest
+Known-Class Main Metric,Accuracy: 0.9717,Known Attack Det Rate: 2.70%
+MITM F1 Score,0.0000,0.3174
+MITM Detection Rate,0.00% (Misclassified into known classes),18.86%

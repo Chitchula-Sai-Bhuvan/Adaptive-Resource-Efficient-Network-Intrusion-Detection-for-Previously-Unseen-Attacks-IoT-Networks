@@ -1,0 +1,23 @@
+dataset_path: "data/raw/train_test_network.csv"
+target_column: "type"
+
+# The class we will hold out for the unseen attack experiment
+unseen_attack: "mitm" 
+
+test_size: 0.3
+random_state: 42
+
+random_forest:
+  n_estimators: 100
+  max_depth: 20
+
+isolation_forest:
+  contamination: 0.05
+
+continual_learning:
+  replay_enabled: true
+  replay_samples_per_class: 50
+
+feature_selection:
+  enabled: true
+  number_of_features: 15

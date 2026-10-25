@@ -1,0 +1,11 @@
+predicted_as,count
+backdoor,0
+ddos,49
+dos,422
+injection,34
+mitm,0
+normal,289
+password,190
+ransomware,0
+scanning,31
+xss,16

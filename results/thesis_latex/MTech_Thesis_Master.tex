@@ -1,0 +1,112 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+% Essential Packages
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage[linesnumbered,ruled,vlined]{algorithm2e}
+\usepackage{setspace}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{fancyhdr}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\onehalfspacing
+
+\begin{document}
+
+% ---------------------------------------------------------
+% TITLE PAGE
+% ---------------------------------------------------------
+\begin{titlepage}
+\centering
+\vspace*{1cm}
+
+{\Huge \textbf{Adaptive and Resource-Efficient Network Intrusion Detection for Previously Unseen Attacks in IoT Networks}\par}
+\vspace{1.5cm}
+
+{\Large \textbf{A Thesis Submitted in Partial Fulfillment of the Requirements for the Degree of}\par}
+\vspace{0.5cm}
+{\Large \textbf{Master of Technology (M.Tech)}\par}
+\vspace{0.3cm}
+{\large in Computer Science and Engineering / Cyber Security\par}
+
+\vspace{2cm}
+{\large \textbf{Submitted By:}\par}
+{\Large \textbf{Sai Bhuvan}\par}
+
+\vfill
+{\large Department of Computer Science and Engineering\par}
+\vspace{0.3cm}
+{\large 2026\par}
+\end{titlepage}
+
+% ---------------------------------------------------------
+% ABSTRACT
+% ---------------------------------------------------------
+\newpage
+\pagenumbering{roman}
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+The rapid proliferation of edge Internet of Things (IoT) devices has created an expansive attack surface susceptible to evolving cyber threats. Contemporary Machine Learning-based Network Intrusion Detection Systems (NIDS) achieve high classification accuracy under controlled static benchmarks. However, they rely strictly on a closed-world assumption that renders them completely blind to previously unobserved zero-day attack vectors. Furthermore, when these models are retrained to assimilate new threats, they suffer from catastrophic forgetting, severely degrading their ability to classify historical attack patterns. Traditional remedies—such as full joint retraining from scratch—require storing massive historical packet traces and impose prohibitive computational overhead, rendering them unviable on memory- and compute-constrained edge hardware.
+
+This thesis presents an autonomous, resource-efficient Continual Learning framework designed specifically for edge IoT intrusion detection. The proposed architecture integrates a dual-stage closed-loop pipeline: (1) an unsupervised Isolation Forest anomaly filter that screens out-of-distribution network traffic without labels, and (2) an adaptive lifelong learning engine powered by a deterministic, volume-aware \textbf{Dynamic Replay Buffer}. Rather than relying on rigid, arbitrary static buffers that fail during high-volume attacks, our allocation rule dynamically scales historical replay quotas to neutralize class imbalance during decision tree splitting.
+
+Extensive empirical evaluations were conducted on the benchmark TON\_IoT dataset across four diverse zero-day attack classes (MITM, Ransomware, XSS, and Backdoor). The results demonstrate:
+\begin{enumerate}
+    \item Closed-world supervised baselines fail completely on novel zero-day attacks, yielding an exact $0.000$ F1-score.
+    \item Full joint retraining causes severe class imbalance when assimilating compact novel attacks, achieving only a $0.648$ F1-score on novel MITM traffic. In contrast, our Dynamic Replay architecture achieves a $0.977$ F1-score (+32.9\% improvement).
+    \item While fixed static buffers ($100$ samples/class) reduce memory by $99.3\%$, they suffer from severe maximum catastrophic forgetting spikes (up to $39.7\%$) under volumetric attacks. Our Dynamic Replay rule slashes maximum forgetting by $35.8\%$ (capping degradation below $0.25$) while preserving $>96.8\%$ to $99.3\%$ memory savings.
+    \item Model updates execute on edge hardware in under $0.085$ seconds, enabling real-time, on-device autonomous security.
+\end{enumerate}
+
+Finally, the framework's computational efficiency is mapped to the United Nations Sustainable Development Goals (SDG 9, SDG 11, and SDG 12), establishing a scalable, green AI paradigm for securing modern IoT infrastructure.
+
+\vspace{1cm}
+\noindent \textbf{Keywords:} IoT Security, Network Intrusion Detection, Continual Learning, Catastrophic Forgetting, Dynamic Replay Buffer, Zero-Day Attacks, Resource-Efficient AI.
+
+% ---------------------------------------------------------
+% TABLE OF CONTENTS & LISTS
+% ---------------------------------------------------------
+\newpage
+\tableofcontents
+
+\newpage
+\listoffigures
+
+\newpage
+\listoftables
+
+% ---------------------------------------------------------
+% CHAPTERS
+% ---------------------------------------------------------
+\newpage
+\pagenumbering{arabic}
+
+\input{results/thesis_latex/chapter1_introduction.tex}
+\input{results/thesis_latex/chapter2_literature_review.tex}
+\input{results/thesis_latex/chapter3_system_model.tex}
+\input{results/thesis_latex/chapter4_proposed_framework.tex}
+\input{results/thesis_latex/chapter5_results_and_discussion.tex}
+\input{results/thesis_latex/chapter6_conclusion_and_future_work.tex}
+
+% ---------------------------------------------------------
+% BIBLIOGRAPHY
+% ---------------------------------------------------------
+\newpage
+\bibliographystyle{IEEEtran}
+\bibliography{results/thesis_latex/references}
+
+\end{document}

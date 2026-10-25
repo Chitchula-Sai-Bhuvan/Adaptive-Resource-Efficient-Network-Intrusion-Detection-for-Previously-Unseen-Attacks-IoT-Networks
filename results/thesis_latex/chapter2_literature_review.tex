@@ -1,0 +1,61 @@
+\chapter{Literature Review and Related Work}
+\label{chap:literature_review}
+
+\section{Machine Learning in Network Intrusion Detection}
+Network Intrusion Detection Systems (NIDS) constitute an indispensable component of defensive cyber operations. Over the past decade, the rapid proliferation of high-throughput network architectures and the sophistication of encrypted adversarial tactics have rendered conventional signature-matching systems (e.g., Snort, Suricata) insufficient against polymorphous exploits. Consequently, extensive research has focused on applying Machine Learning (ML) and Deep Learning (DL) to statistical packet flow analytics.
+
+Traditional supervised algorithms—including Support Vector Machines (SVM), k-Nearest Neighbors (k-NN), Decision Trees, and Naive Bayes—were initially leveraged on historical intrusion datasets such as KDD-CUP99 and NSL-KDD. However, these classical datasets have been widely criticized in literature for unrealistic traffic distributions, outdated attack primitives, and severe artificial class redundancies. 
+
+With the emergence of contemporary benchmarks such as UNSW-NB15, CIC-IDS2017, and particularly the **TON\_IoT** dataset, researchers transitioned toward advanced tree-ensemble methodologies, notably Random Forests (RF), XGBoost, and LightGBM. Ensemble tree methods consistently exhibit state-of-the-art performance on tabular network metadata (e.g., packet header statistics, inter-arrival times, byte rates, and TCP flag counts). Their superior performance is driven by their capacity to capture non-linear feature interactions, natural resistance to numerical feature scaling disparities, and resilience against multi-collinearity. In static benchmarks, Random Forest architectures routinely attain over 97\% classification accuracy with low false-alarm ratios.
+
+Despite these achievements, a critical deficiency persists across the vast majority of supervised NIDS literature: models are evaluated strictly under static, stationary test splits. In real-world deployment environments, network distributions are non-stationary, and supervised classifiers operate under a closed-world assumption that blinds them to out-of-distribution attacks.
+
+\section{Zero-Day Threat Discovery and Anomaly Detection}
+To overcome the closed-world limitation of supervised learning, researchers have extensively explored unsupervised and semi-supervised anomaly detection. These frameworks train exclusively on benign baseline traffic, aiming to model the normal operational manifold of the network:
+\begin{enumerate}
+    \item \textbf{Statistical and Distance-Based Detectors:} Methods such as One-Class Support Vector Machines (OC-SVM) and Local Outlier Factor (LOF) delineate high-density regions of benign behavior. While mathematically rigorous, their computational complexity scales quadratically with dataset volume ($\mathcal{O}(N^2)$), rendering them impractical for high-speed IoT gateway monitoring.
+    \item \textbf{Tree-Based Ensembles (Isolation Forests):} Proposed by Liu et al., Isolation Forests isolate anomalies by recursively partitioning feature space using random orthogonal hyperplanes. Since anomalies are mathematically few and qualitatively divergent, they exhibit significantly shorter average path lengths in binary isolation trees. Isolation Forests achieve linear computational complexity ($\mathcal{O}(N \log N)$) and low memory consumption, making them the leading candidate for resource-constrained edge computing.
+    \item \textbf{Deep Autoencoders and Variational Autoencoders (VAEs):} Deep neural autoencoders reconstruct benign network features through an informational bottleneck. Flows yielding high reconstruction errors are flagged as anomalies. While capable of learning rich latent representations, deep autoencoders require extensive graphics processing unit (GPU) acceleration and hyperparameter tuning, which exceeds the thermal and architectural capabilities of edge microcontrollers.
+\end{enumerate}
+
+Despite their theoretical appeal for zero-day threat discovery, unsupervised anomaly detectors exhibit severe practical drawbacks in operational settings. First, normal IoT traffic is frequently noisy and bursting (e.g., periodic sensor updates, network reconnections), leading to unacceptable false-positive rates that trigger alert fatigue for security operations teams. Second, anomaly detectors only generate binary alarm signals; they lack multi-class discriminatory granularity, cannot distinguish between attack types (e.g., differentiating benign misconfigurations from active MITM exploits), and possess no native mechanism to update downstream classification engines.
+
+\section{Continual Learning Paradigms}
+Continual Learning (also known as Lifelong Learning or Incremental Learning) provides the foundational mathematical framework to overcome static model obsolescence. Continual learning algorithms are categorized into three primary structural paradigms:
+
+\subsection{Regularization-Based Approaches}
+Regularization methods prevent catastrophic forgetting by penalizing modifications to model parameters that were critical for historical tasks. 
+\begin{itemize}
+    \item \textbf{Elastic Weight Consolidation (EWC):} Proposed by Kirkpatrick et al., EWC calculates the diagonal elements of the Fisher Information Matrix to identify parameter sensitivity. When updating the model on task $T_2$, quadratic penalties are applied to parameter shifts along high-curvature dimensions corresponding to task $T_1$.
+    \item \textbf{Synaptic Intelligence (SI):} Zenke et al. introduced path-integral metrics to measure parameter importance online during gradient descent trajectories.
+\end{itemize}
+While computationally elegant and requiring zero historical sample storage, regularization techniques suffer from two fatal weaknesses in cybersecurity applications: they struggle under long task sequences (as parameter capacity quickly saturates) and are fundamentally restricted to differentiable neural networks, precluding their use with high-performing, resource-efficient tree ensemble models.
+
+\subsection{Parameter Isolation and Architecture-Expanding Approaches}
+Parameter isolation methods allocate dedicated sub-networks or dynamically expand model architecture when encountering new tasks (e.g., Progressive Neural Networks, PackNet). While completely eliminating catastrophic forgetting, the architectural complexity and memory footprint scale linearly with the number of encountered tasks ($\mathcal{O}(T)$), violating the rigid hardware constraints of IoT devices.
+
+\subsection{Replay-Based Approaches (Experience Replay)}
+Replay methods mitigate catastrophic forgetting by retaining or generating representative historical exemplars and re-exposing them to the learning algorithm during new task optimization. Experience replay remains the most empirically robust continual learning strategy in non-stationary environments.
+\begin{itemize}
+    \item \textbf{Generative Replay:} Generative Adversarial Networks (GANs) or diffusion models synthesize pseudo-historical samples. However, training generative networks on edge IoT hardware is computationally prohibitive and prone to mode collapse.
+    \item \textbf{Exemplar Replay:} Historical training samples are preserved in an episodic replay buffer. During novel task learning, exemplars are combined with new task data. Replay buffers are natively compatible with both neural architectures and ensemble decision trees.
+\end{itemize}
+
+\section{Replay in Cybersecurity and the Memory Bottleneck}
+Recent pioneering work by researchers has begun evaluating continual learning within the cybersecurity domain. Notably, the landmark study \textit{``Replay or Regret: Evaluating Continual Learning Methods for Robust Intrusion Detection''} systematically benchmarked regularization and replay methods across multi-class network traffic streams. The authors unequivocally demonstrated that rehearsal-based replay methods consistently outperform parameter regularization across network intrusion benchmarks.
+
+However, existing literature universally relies on one of two flawed memory assumptions:
+\begin{enumerate}
+    \item \textbf{The Infinite Buffer / Full Retraining Assumption:} Models assume access to an unconstrained centralized repository where all historical training data is permanently retained. Full joint retraining is triggered whenever new attacks are identified. As previously emphasized, this brute-force approach requires storing hundreds of thousands of high-dimensional flow records, which is impossible on edge IoT devices with constrained flash storage.
+    \item \textbf{The Arbitrary Static Buffer Assumption:} When memory limits are imposed, researchers uniformly assign an arbitrary, fixed static buffer size (e.g., $k = 50$ or $k = 100$ samples per class).
+\end{enumerate}
+
+\section{Critical Research Gaps in Contemporary Literature}
+A rigorous synthesis of the related literature reveals three critical research gaps:
+\begin{itemize}
+    \item \textbf{Research Gap 1: Disconnected Zero-Day Detection and Model Adaptation:} Existing systems either focus on detecting anomalies or on incremental training, but fail to integrate both into an autonomous, closed-loop pipeline where isolated zero-day anomalies seamlessly trigger on-device adaptation.
+    \item \textbf{Research Gap 2: The Full Retraining Imbalance Vulnerability:} Prior literature assumes full retraining is the optimal performance ceiling. However, the severe class imbalance induced when small zero-day attack batches are submerged within massive historical datasets has been largely overlooked.
+    \item \textbf{Research Gap 3: Volumetric Vulnerability of Static Buffers:} Contemporary continual NIDS literature assumes static memory buffers. The vulnerability of fixed buffers when confronted with varying incoming attack volumes—where massive attacks overwhelm the buffer and trigger severe catastrophic forgetting spikes—remains unaddressed.
+\end{itemize}
+
+This thesis directly bridges these critical gaps by architecting an integrated, volume-aware Dynamic Continual Learning framework tailored specifically for resource-constrained IoT edge environments.

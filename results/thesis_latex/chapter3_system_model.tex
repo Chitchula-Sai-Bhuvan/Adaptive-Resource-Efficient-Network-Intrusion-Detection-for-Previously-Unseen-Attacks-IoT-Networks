@@ -1,0 +1,86 @@
+\chapter{System Model and Problem Formulation}
+\label{chap:system_model}
+
+\section{Edge IoT Network Architecture and Threat Model}
+\subsection{Deployment Topology}
+The target deployment environment considered in this thesis corresponds to a distributed Edge IoT architecture, commonly encountered in smart manufacturing, healthcare monitoring, and intelligent municipal infrastructure. The network architecture consists of three hierarchical layers:
+\begin{enumerate}
+    \item \textbf{Perception and Sensor Layer:} Microcontroller-driven smart endpoints (e.g., environmental monitors, medical telemetry sensors, industrial PLCs) that continuously capture physical observations and transmit digitized telemetry using lightweight application protocols (e.g., MQTT, CoAP, Modbus).
+    \item \textbf{Edge Computing Layer:} Intermediate network aggregation hardware, such as edge gateways, industrial access routers, and smart border hubs. These devices aggregate heterogeneous sensor streams, perform preliminary data filtering, and host the real-time Network Intrusion Detection System (NIDS).
+    \item \textbf{Centralized Management / Cloud Layer:} Upstream enterprise security operations centers (SOC) that manage long-term threat intelligence, security policy updates, and human-in-the-loop incident auditing.
+\end{enumerate}
+
+\subsection{Threat Model and Adversarial Capabilities}
+Adversaries targeting edge IoT networks exhibit diverse technical objectives and traffic generation profiles:
+\begin{itemize}
+    \item \textbf{Stealthy / Low-Volume Adversaries (e.g., MITM):} Malicious actors that deploy ARP spoofing or DNS poisoning to silently intercept, inspect, or tamper with sensory payloads without disrupting network connectivity. These attacks generate minimal anomalous traffic volume ($\sim$100--200 packets), deliberately evading rate-limiting volumetric defenses.
+    \item \textbf{Exploitative / Persistent Adversaries (e.g., Ransomware, Password Brute-Force):} Adversaries seeking to compromise edge device credentials or encrypt local filesystems, generating sustained bursts of credential-guessing or SMB/RPC packet flows ($\sim$1,000--3,000 packets).
+    \item \textbf{Volumetric / Aggressive Adversaries (e.g., XSS, Backdoor, DDoS):} High-volume compromise campaigns involving automated vulnerability scanning, injection attacks, and reverse shell beacons. These attacks generate thousands of network flows ($\sim$3,000--4,000 packets), presenting sudden bursts of novel traffic.
+\end{itemize}
+
+\section{Mathematical Formulation of the NIDS Problem}
+Let raw network traffic be represented as a continuous, time-ordered sequence of packet flows $\mathcal{S} = \{\mathbf{f}_1, \mathbf{f}_2, \dots, \mathbf{f}_t, \dots\}$. Each flow $\mathbf{f}_t$ is summarized by a feature extraction preprocessor into a real-valued feature vector $\mathbf{x}_t \in \mathcal{X} \subset \mathbb{R}^d$, where $d$ denotes the feature dimensionality (including statistical flow metrics such as duration, packet counts, inter-arrival times, TCP flags, and protocol indicators).
+
+\subsection{Closed-World Supervised Formulation}
+Under the standard closed-world formulation, the intrusion detection model is trained offline on a static historical dataset:
+\begin{equation}
+\mathcal{D}_{train} = \{(\mathbf{x}_i, y_i)\}_{i=1}^{N}, \quad \mathbf{x}_i \in \mathcal{X}, \quad y_i \in \mathcal{C}_{known}
+\end{equation}
+where $\mathcal{C}_{known} = \{1, 2, \dots, K\}$ denotes the set of $K$ known attack classes (e.g., Benign, DDoS, Scanning, Password, etc.). 
+
+A supervised multi-class classifier $f_{\theta}: \mathcal{X} \rightarrow \mathcal{C}_{known}$ is trained by minimizing the empirical risk over $\mathcal{D}_{train}$:
+\begin{equation}
+\theta^* = \arg\min_{\theta} \frac{1}{N} \sum_{i=1}^{N} \mathcal{L}(f_{\theta}(\mathbf{x}_i), y_i)
+\end{equation}
+where $\mathcal{L}$ denotes the multi-class loss function (such as Gini impurity minimization in Random Forests or cross-entropy loss).
+
+\subsection{Open-World Zero-Day Vulnerability}
+In an operational deployment, network flows are drawn from an open-world distribution:
+\begin{equation}
+\mathcal{P}_{open}(\mathbf{x}, y) = (1 - \pi) \mathcal{P}_{known}(\mathbf{x}, y) + \pi \mathcal{P}_{novel}(\mathbf{x}, y)
+\end{equation}
+where $\pi \in [0, 1]$ represents the probability of encountering a novel, unobserved zero-day attack class $y^* \notin \mathcal{C}_{known}$.
+
+Because the decision space of the closed-world classifier $f_{\theta}$ is strictly bounded by $\mathcal{C}_{known}$, the probability simplex satisfies:
+\begin{equation}
+\sum_{k \in \mathcal{C}_{known}} P(y = k \mid \mathbf{x}) = 1.0, \quad \forall \mathbf{x} \in \mathcal{X}
+\end{equation}
+Consequently, when a novel packet $\mathbf{x}_{novel} \sim \mathcal{P}_{novel}$ enters the system:
+\begin{equation}
+f_{\theta}(\mathbf{x}_{novel}) \in \mathcal{C}_{known} \implies \text{Error Guaranteed}
+\end{equation}
+The closed-world classifier is mathematically incapable of identifying the attack as novel, forcing an immediate false-negative or misclassification error.
+
+\section{The Mechanics of Catastrophic Forgetting in Decision Tree Ensembles}
+While catastrophic forgetting is typically analyzed within gradient-based neural networks (where weight updates overwrite historical orthogonal features), it is equally devastating in non-parametric tree ensembles such as Random Forests. 
+
+A Random Forest comprises an ensemble of $B$ independent decision trees $\{T_b\}_{b=1}^{B}$. For each tree, recursive binary splitting selects the feature $j$ and threshold $\tau$ that maximize the impurity reduction $\Delta I$:
+\begin{equation}
+\Delta I(s, j, \tau) = I(s) - \frac{|s_L|}{|s|} I(s_L) - \frac{|s_R|}{|s|} I(s_R)
+\end{equation}
+where $I(s)$ represents the Gini impurity of node $s$:
+\begin{equation}
+I(s) = 1 - \sum_{k=1}^{K} p_k^2
+\end{equation}
+and $p_k$ is the empirical fraction of class $k$ samples present at node $s$.
+
+\subsection{Why Fine-Tuning Only on New Attacks Destroys Legacy Boundaries}
+When an updated batch containing solely novel attack samples $\mathcal{D}_{novel}$ is presented to the model without historical context:
+\begin{equation}
+p_{novel} \rightarrow 1.0, \quad p_k \rightarrow 0 \quad (\forall k \in \mathcal{C}_{known})
+\end{equation}
+The tree construction algorithm optimizes feature splits solely to isolate the novel class from residual noise. All existing internal split nodes that previously partitioned historical classes (e.g., distinguishing DDoS from Benign traffic) are eradicated because historical classes have zero empirical presence in the optimization batch. Consequently, legacy accuracy drops catastrophically to zero.
+
+\subsection{The Imbalance Vulnerability of Static Buffers}
+When a fixed static buffer $\mathcal{B}_{static}$ is utilized with a quota of $k_{static}$ samples per class, the total historical memory size is $|\mathcal{B}_{static}| = K \cdot k_{static}$. 
+
+If a novel volumetric attack arrives with $M = |\mathcal{D}_{novel}|$ samples:
+\begin{equation}
+\text{Imbalance Ratio } \rho = \frac{M}{K \cdot k_{static}}
+\end{equation}
+\begin{itemize}
+    \item When $\rho \ll 1$ (e.g., MITM attack, $M \approx 180$, $K \cdot k_{static} = 900$, $\rho = 0.20$): The historical classes maintain dominant representation. The tree splits preserve historical boundaries, and forgetting remains negligible ($\mathcal{F}_{max} \approx 0.06$).
+    \item When $\rho \gg 1$ (e.g., XSS or Backdoor, $M \approx 3,500$, $K \cdot k_{static} = 900$, $\rho = 3.88$): The novel attack dominates the training set by nearly 4:1. During tree construction, the greedy split algorithm heavily favors splitting features that pure-classify the massive novel class, sacrificing historical boundary purity and causing severe catastrophic forgetting spikes ($\mathcal{F}_{max} \approx 0.40$).
+\end{itemize}
+
+This mathematical reality proves that fixed static buffers are fundamentally flawed for intrusion detection: the buffer must dynamically scale to neutralize the imbalance ratio $\rho \approx 1.0$.

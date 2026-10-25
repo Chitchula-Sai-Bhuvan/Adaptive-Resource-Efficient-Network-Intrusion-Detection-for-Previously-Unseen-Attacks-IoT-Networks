@@ -1,0 +1,14 @@
+Metric,Initial Baseline,Clean Baseline
+Accuracy,0.9711,0.9717
+Macro-F1,0.8811,0.8817
+Weighted-F1,0.9622,0.9627
+F1_backdoor,0.9996,0.9996
+F1_ddos,0.9785,0.9840
+F1_dos,0.9401,0.9411
+F1_injection,0.9744,0.9719
+F1_normal,0.9852,0.9855
+F1_password,0.9791,0.9784
+F1_ransomware,0.9995,0.9993
+F1_scanning,0.9870,0.9882
+F1_xss,0.9679,0.9692
+F1_mitm,0.0000,0.0000
