@@ -1,80 +1,125 @@
 \chapter{Introduction}
 \label{chap:introduction}
 
-\section{Background and Context}
-The pervasive deployment of the Internet of Things (IoT) has fundamentally transformed modern industrial automation, healthcare delivery, critical public infrastructure, and consumer smart environments. Modern IoT ecosystems are characterized by vast networks of interconnected edge devices—ranging from low-power smart sensors and microcontroller units to smart gateways and edge routers—that continuously acquire, process, and transmit telemetry data. However, the ubiquitous expansion of IoT infrastructure has outpaced traditional cybersecurity paradigms, introducing unprecedented vulnerabilities. Edge devices operate under severe hardware constraints, characterized by restricted volatile memory (RAM), limited non-volatile storage, low computational throughput, and tight thermal and battery energy budgets. Consequently, these devices represent attractive targets for malicious actors seeking to launch distributed denial-of-service (DDoS) botnets, ransomware deployments, credential exfiltration, and unauthorized lateral network movements.
+Small connected devices now sit inside factories, hospitals, power substations and ordinary homes. Most of them were designed to be cheap and power-efficient, not secure. They run stripped-down firmware, are rarely patched, and often stay in the field for years with default settings. Together they give attackers a large and poorly defended surface, and a single compromised sensor or camera can become an entry point into a much more valuable network.
 
-To safeguard distributed IoT infrastructure, Network Intrusion Detection Systems (NIDS) have emerged as the foundational layer of cyber defense. Traditional signature-based detection systems rely on static rule databases; while effective against previously analyzed exploits, they fail catastrophically when confronted with zero-day attacks, modified payloads, or obfuscated traffic patterns. In response, Machine Learning (ML) and Deep Learning (DL) methodologies have been widely integrated into NIDS architectures to automatically discover complex non-linear signatures from high-dimensional network flow data. When trained on benchmark datasets such as TON\_IoT, modern supervised algorithms (e.g., Random Forests, Gradient Boosted Trees, and Deep Neural Networks) achieve near-perfect classification accuracies exceeding 98\% across known attack categories.
+Because the devices themselves can seldom protect themselves, security is usually pushed to the network. A Network Intrusion Detection System (NIDS) watches traffic flowing through a gateway and raises an alarm when the traffic looks malicious. Older NIDS matched packets against hand-written signatures of known attacks. Over the last decade this has largely given way to machine learning models that learn the statistical shape of each attack from labelled flow records. On public benchmarks such models routinely report accuracies above 95\%, and tree ensembles such as Random Forest~\cite{breiman2001random} are especially popular because they are accurate, fast and easy to interpret.
 
-\section{The Core Dilemma: Static Models in Dynamic Environments}
-Despite their high empirical accuracy under controlled laboratory benchmarks, conventional supervised NIDS operate under a rigid, flawed assumption: the \textbf{Closed-World Assumption}. Closed-world learning presupposes that the probability distribution of network traffic during operational deployment is strictly identical to the historical distribution observed during offline training ($\mathcal{P}_{test}(\mathbf{x}, y) = \mathcal{P}_{train}(\mathbf{x}, y)$).
+Those benchmark figures hide an awkward fact. A supervised classifier only knows the classes it was trained on. In a real deployment, attackers do not stay within that list: new malware families appear, old techniques are combined in new ways, and devices are exposed to traffic that nobody labelled. When such traffic arrives, the model does not say ``I do not know''. It confidently assigns the flow to the nearest familiar class, and the attack passes unnoticed. Once the new attack has been identified, the model has to be updated, and on an edge gateway with limited memory and processing power that update is itself a hard problem.
 
-In practical network deployments, this assumption is invalid. Adversarial tactics evolve continuously: zero-day vulnerabilities are weaponized, malware variants dynamically alter their payload heuristics, and targeted exploits—such as Man-in-the-Middle (MITM) session hijacking or stealthy backdoor compromises—emerge without historical precedent. When a closed-world supervised model encounters an out-of-distribution (OOD) novel attack, its mathematical formulation forces it to assign the new vector to one of its predefined known classes. As our preliminary experiments demonstrate, a baseline Random Forest model achieves an exact \textbf{0.000 F1-score} when confronted with an unobserved MITM or zero-day attack, misclassifying malicious payloads as benign traffic or generic denial-of-service flows.
+This thesis is motivated by that gap between benchmark performance and deployed behaviour. It asks how an IoT intrusion detector can keep learning new attacks after deployment without forgetting the old ones, and without needing more memory or computation than an edge device can offer.
 
-To address zero-day vulnerabilities, the cybersecurity literature has historically explored two divergent paradigms, both of which suffer from severe practical limitations in IoT edge environments:
+\section{Problem Definition}
+\label{sec:problem_definition}
+
+The problem studied here has two linked parts. The first is \emph{detection}: a deployed model must be able to notice that some traffic does not belong to any class it knows. The second is \emph{adaptation}: once that traffic is confirmed as a new attack, the model must learn it quickly while still recognising everything it learned before. Each part is easy to solve on its own. Solving both together on constrained hardware is what makes the problem difficult.
+
+\subsection{Why Static Detectors Miss Unseen Attacks}
+\label{subsec:closed_world}
+
+A standard classifier is trained under what is called the closed-world assumption: every sample it will ever see belongs to one of the $K$ classes present in the training data. Its output layer, or in the case of a Random Forest its set of leaf labels, simply has no option for anything else. An unseen attack is therefore not rejected; it is mislabelled.
+
+We measured how severe this is. Using a leave-one-attack-out protocol on the TON\_IoT dataset~\cite{alshammari2020toniot}, we removed one attack class from training at a time and tested the resulting model on it. The baseline Random Forest reached 97.2\% overall accuracy, yet its F1 score on each held-out attack (MITM, ransomware, XSS and backdoor) was exactly zero. Every unseen flow was assigned to some known class.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{results/figures/chapter1/fig1_1_closed_world_failure.pdf}
+    \caption{The closed-world failure mode on TON\_IoT: (a) Per-class F1 score of the baseline Random Forest classifier on familiar classes alongside the zero F1 score on the unseen MITM attack class; (b) Distribution of incorrect predictions when unseen MITM flows are silently misclassified across known attack types and normal traffic.}
+    \label{fig:closed_world_failure}
+\end{figure}
+
+As shown in Figure~\ref{fig:closed_world_failure}, while the model maintains a high known-class mean F1 of 0.989, unobserved MITM flows are silently misclassified into existing classes---predominantly DoS (40.9\%) and Normal traffic (28.0\%). This confirms that high static benchmark accuracy provides false assurance in dynamic network environments.
+
+Unsupervised anomaly detectors such as Isolation Forest~\cite{liu2008isolation} take a different route. They learn what ordinary traffic looks like and flag whatever deviates from it, so in principle they can react to attacks they have never seen. In practice their signal is weak and noisy. In our experiments Isolation Forest flagged only 18.9\% of unseen MITM flows. That is useful as an early warning, but it cannot replace a classifier that tells the operator \emph{which} attack is under way.
+
+\subsection{The Cost of Updating a Deployed Model}
+\label{subsec:update_cost}
+
+Suppose the new attack has been flagged and a few hundred labelled examples are available. There are three obvious ways to update the model, and each has a serious drawback on an edge device.
+
+\subsubsection*{Retraining on new data only}
+The cheapest option is to train only on the new attack samples. This learns the new class almost perfectly but destroys what the model knew before. The effect is known as \emph{catastrophic forgetting}~\cite{kirkpatrick2017overcoming, parisi2019continual}: the decision boundaries that separated the old classes are overwritten by boundaries fitted to the new data. In our experiments, a model updated this way lost essentially all of its ability to recognise the original attack classes.
+
+\subsubsection*{Full retraining}
+The opposite option is to keep the complete historical dataset and retrain from scratch on old and new data together. This avoids forgetting, but it requires storing well over a hundred thousand flow records on the device and repeating the full training cost for every update. Less obviously, it also performs poorly when the new attack is rare. With 207 MITM samples mixed into 127{,}787 historical flows, the retrained model learned MITM with an F1 of only 0.648, because the new class was swamped by the old ones.
+
+\subsubsection*{Fixed-size replay}
+A middle path, borrowed from the continual learning literature~\cite{lopezpaz2017gem, de2021continual}, is to keep a small buffer of representative old samples and replay them alongside the new data. A buffer of 100 samples per class worked very well for the small MITM attack (F1 of 0.977 with 99.3\% less storage). The trouble begins when the new attack is large. Attacks such as XSS and backdoor arrive with thousands of samples, which outnumber a fixed buffer many times over. The model then tilts towards the new class, and the worst-affected old class lost up to 0.397 in F1. A buffer size that suits one attack is therefore the wrong size for another.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{results/figures/chapter1/fig1_2_update_dilemma.pdf}
+    \caption{The model update dilemma on resource-constrained edge devices: Comparison of fine-tuning on new data only, full joint retraining, and fixed-size replay ($100$ exemplars/class) across (a) New-attack F1, (b) Known-class accuracy, (c) Historical sample storage footprint (log scale), and (d) Adaptation update time.}
+    \label{fig:update_dilemma}
+\end{figure}
+
+Figure~\ref{fig:update_dilemma} highlights this fundamental trilemma: retraining on new data alone triggers catastrophic forgetting (known accuracy drops to 0.000); full retraining requires preserving 127,787 historical flows and degrades new rare-class detection due to severe class imbalance (0.648 F1); while fixed-size replay preserves known-class accuracy with minimal storage (900 flows) and sub-0.1\,s update latency.
+
+However, as shown in Figure~\ref{fig:buffer_vs_volume}, fixed-capacity static replay breaks down when encountering volumetric attacks where incoming novel samples $M$ outnumber historical buffer exemplars.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.75\textwidth]{results/figures/chapter1/fig1_3_buffer_vs_volume.pdf}
+    \caption{Effect of incoming novel attack volume on maximum catastrophic forgetting: Static replay buffers suffer severe forgetting spikes as incoming samples outnumber stored historical samples. The proposed Dynamic Replay rule adaptively scales historical exemplars to constrain forgetting across varying attack volumes.}
+    \label{fig:buffer_vs_volume}
+\end{figure}
+
+\subsection{Problem Statement}
+\label{subsec:problem_statement}
+
+Let $\mathcal{D}_{\text{train}}$ be the historical training data over $K$ known classes, and let $\mathcal{D}_{\text{new}}$ be a batch of $M$ labelled samples from a newly identified attack. The problem addressed in this thesis is to update a deployed classifier using $\mathcal{D}_{\text{new}}$ and a small subset of $\mathcal{D}_{\text{train}}$ so that:
 \begin{enumerate}
-    \item \textbf{Unsupervised Anomaly Detection:} Unsupervised models (such as Isolation Forests or Deep Autoencoders) model the boundary of normal operational behavior and flag statistically deviant flows as anomalies. However, as demonstrated in our findings, unsupervised anomaly detectors suffer from high false-positive rates and low detection recall on nuanced attacks (e.g., yielding only 18.8\% detection recall on MITM flows). Furthermore, anomaly detectors provide binary alerts without classification granularity and cannot autonomously update downstream classifiers.
-    \item \textbf{Offline Full Joint Retraining:} When a novel attack vector is identified and labeled by network administrators, the standard operational remedy is to aggregate the new attack data with the historical training corpus and retrain the classification model from scratch. In real-world edge IoT networks, this brute-force retraining paradigm is mathematically and physically infeasible. Storing tens of gigabytes of historical packet traces requires storage capacity that edge nodes do not possess. Moreover, complete retraining is computationally expensive, induces significant latency, causes thermal throttling, and introduces extreme class imbalance where massive historical datasets overwhelm small zero-day attack signatures.
+    \item the new attack is detected with high F1;
+    \item performance on the $K$ known classes drops as little as possible, measured by average and maximum forgetting;
+    \item the number of stored historical samples stays within a fixed memory budget; and
+    \item the update completes in a time that is practical on an edge gateway.
+\end{enumerate}
+These requirements must hold whether the new attack is small (a few hundred samples) or large (several thousand).
+
+\section{Objectives}
+\label{sec:objectives}
+
+The work in this thesis is organised around four objectives:
+\begin{enumerate}
+    \item To quantify how badly a closed-world IoT NIDS fails on attacks it was not trained on, and how much an unsupervised anomaly detector can recover.
+    \item To compare full retraining, retraining on new data only and fixed-size replay in terms of new-attack detection, forgetting, memory use and update time.
+    \item To study how replay buffer size trades memory against retention of old knowledge.
+    \item To design and evaluate a replay allocation rule that adapts to the size of the incoming attack, so that forgetting stays bounded for both small and large attacks.
 \end{enumerate}
 
-\section{The Plasticity-Stability Dilemma in Continual Learning}
-Continual Learning (also termed Lifelong Learning) seeks to enable machine learning models to assimilate new knowledge from non-stationary data streams sequentially without degrading performance on previously acquired knowledge. The fundamental challenge governing continual learning is the \textbf{Plasticity-Stability Dilemma}:
-\begin{itemize}
-    \item \textbf{Plasticity:} The capacity of a learning system to readily adapt its internal parameters to acquire new representations and patterns from novel data distributions.
-    \item \textbf{Stability:} The capacity of the system to preserve its historical representations and retain high accuracy on legacy tasks over time.
-\end{itemize}
+\section{Contributions}
+\label{sec:contributions}
 
-When standard models are fine-tuned exclusively on newly emerging attack data, they prioritize plasticity at the total expense of stability, succumbing to \textbf{Catastrophic Forgetting}. The optimization trajectory aggressively alters model decision boundaries to minimize empirical risk on the new data, thereby obliterating the boundaries previously constructed for historical attacks. Consequently, while the updated model successfully learns the new attack, it completely loses its ability to recognize basic historical threats (e.g., DDoS or Password cracking).
+To achieve these objectives, this thesis introduces a closed-loop dual-stage framework for IoT edge intrusion detection, illustrated in Figure~\ref{fig:framework_overview}.
 
-While experience replay (replaying a subset of historical samples alongside new samples) has emerged as an effective countermeasure to catastrophic forgetting, existing replay literature assumes either infinite memory buffers or arbitrary static buffer sizes. As uncovered in this thesis, a fixed static replay buffer creates a volatile adaptation-retention trade-off: when a large volumetric attack (e.g., XSS or Backdoor with thousands of packets) hits the network, it severely outnumbers a static buffer, triggering a catastrophic forgetting spike where accuracy on historical classes degrades by nearly 40\%.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{results/figures/chapter1/fig1_4_framework_overview.pdf}
+    \caption{Overview of the proposed two-stage continual intrusion detection framework: Stage~1 performs real-time edge classification alongside unsupervised anomaly screening for novel traffic; Stage~2 performs volume-aware dynamic replay buffer allocation and efficient on-device model adaptation upon analyst verification.}
+    \label{fig:framework_overview}
+\end{figure}
 
-\section{Problem Statement}
-This research addresses the following formal problem statement:
-\begin{quote}
-\textit{``How can we design, formulate, and validate an autonomous, resource-efficient Continual Learning framework for IoT Network Intrusion Detection that reliably identifies previously unobserved zero-day cyber threats, rapidly assimilates confirmed novel attack classes with high plasticity, and dynamically mitigates catastrophic forgetting across varying incoming attack volumes, all while adhering to the strict memory and computational constraints of edge IoT hardware?''}
-\end{quote}
-
-\section{Research Questions}
-To resolve this problem, the thesis investigates five specific research questions:
-\begin{itemize}
-    \item \textbf{RQ1 (Supervised Failure Mode):} How severely do state-of-the-art closed-world supervised intrusion detection models fail when deployed against previously unobserved network attack classes?
-    \item \textbf{RQ2 (Anomaly Detection Utility):} To what extent can unsupervised anomaly detection (specifically Isolation Forests) reliably isolate zero-day network traffic without producing prohibitive false alarm rates?
-    \item \textbf{RQ3 (Replay Memory Sensitivity):} How does historical memory buffer capacity govern the empirical Pareto trade-off between legacy knowledge retention and resource consumption?
-    \item \textbf{RQ4 (Volumetric Attack Dynamics):} Why do static-sized replay buffers fail during the assimilation of high-volume incoming attacks, and what are the mechanics of the resulting catastrophic forgetting spikes?
-    \item \textbf{RQ5 (Dynamic Allocation Efficacy):} Can an autonomous, volume-aware dynamic replay allocation strategy mathematically stabilize knowledge retention and eliminate forgetting spikes while maintaining extreme ($>96\%$) memory savings?
-\end{itemize}
-
-\section{Research Hypotheses}
-The investigations in this thesis are guided by the following formal hypotheses:
-\begin{itemize}
-    \item \textbf{H1:} Closed-world supervised tree ensembles yield exactly zero recall ($F1 = 0.00$) for unobserved attack vectors, validating the theoretical detection deficit.
-    \item \textbf{H2:} Unsupervised anomaly detection provides an effective preliminary filter for out-of-distribution traffic but cannot serve as a standalone replacement for supervised multi-class classification.
-    \item \textbf{H3:} Memory storage overhead can be compressed by over 95\% relative to full joint retraining without causing legacy catastrophic forgetting, provided a minimum representative exemplar floor is maintained.
-    \item \textbf{H4:} A dynamic replay allocation rule that scales historical exemplar sampling proportionally to incoming novel attack volume will structurally suppress maximum catastrophic forgetting spikes relative to rigid static buffers.
-\end{itemize}
-
-\section{Key Contributions of the Thesis}
-The primary contributions of this thesis are as follows:
+The main contributions of this thesis are as follows:
 \begin{enumerate}
-    \item \textbf{Comprehensive Empirical Mapping of the Zero-Day Failure Mode:} We establish a rigorous empirical baseline on the TON\_IoT dataset, isolating four distinct attack vectors (MITM, Ransomware, XSS, Backdoor) and quantifying the exact catastrophic forgetting dynamics across baseline, unsupervised, and continual learning models.
-    \item \textbf{Discovery of the Full Retraining Class Imbalance Trap:} We empirically prove that full joint retraining—the assumed industry gold standard—actually harms novel attack acquisition on compact zero-day exploits (achieving only 0.648 F1 on MITM), whereas our balanced replay framework achieves 0.977 F1 (+32.9\% improvement).
-    \item \textbf{Formulation of a Novel Dynamic Volume-Aware Replay Framework:} We design and implement an explainable, deterministic dynamic allocation algorithm:
-    \begin{equation*}
-    k_{dynamic} = \max\left( k_{min}, \min\left( k_{max}, \left\lfloor \frac{M \cdot \alpha}{K} \right\rfloor \right) \right)
-    \end{equation*}
-    which adaptively balances the plasticity-stability equilibrium based on the incoming novelty volume.
-    \item \textbf{Empirical Mitigation of Maximum Catastrophic Forgetting Spikes:} Across four distinct attack classes with varying volumes, our dynamic framework slashes maximum catastrophic forgetting on hardest legacy classes by 35.8\% (capping drops below 0.25 compared to 0.397 in static buffers).
-    \item \textbf{Ultra-Low Resource Footprint for Edge IoT Nodes:} The framework maintains extreme memory reduction ($96.8\%$ to $99.3\%$ reduction in historical sample storage) and achieves sub-0.085 second adaptation latency, enabling genuine real-time, on-device execution on edge gateways.
-    \item \textbf{Formal Sustainability and UN SDG Alignment:} We contextualize the computational efficiencies of the framework within the United Nations Sustainable Development Goals (SDG 9, SDG 11, and SDG 12), quantifying energy and carbon reductions compared to brute-force retraining.
+    \item \textbf{A measured account of the unseen-attack failure.} Under a leave-one-attack-out protocol on TON\_IoT, a 97.2\%-accurate Random Forest scores zero F1 on all four held-out attacks, while Isolation Forest recovers only part of the novel traffic.
+    \item \textbf{Evidence that naïve full retraining is not an upper bound for rare attacks.} Replaying 100 samples per class raises MITM F1 from 0.648 to 0.977 while storing 99.3\% fewer samples and updating about 11$\times$ faster.
+    \item \textbf{A volume-aware Dynamic Replay rule.} The per-class replay quota is scaled with the size of the incoming attack, within fixed lower and upper memory bounds. Compared with a fixed buffer, it reduces maximum forgetting by 20--36\% and average forgetting by up to 40\% on the three high-volume attacks, keeps new-attack F1 above 0.997, retains 96.8--97.6\% memory savings and completes each update in under 0.1~s.
+    \item \textbf{A buffer-sensitivity analysis.} Forgetting falls steadily as the buffer grows, and even 25 samples per class (a 99.8\% reduction) learn MITM with an F1 of 0.980. This gives practitioners a clear way to choose a buffer size for a given memory budget.
 \end{enumerate}
 
-\section{Thesis Organization}
-The remainder of this thesis is structured as follows:
-\begin{itemize}
-    \item \textbf{Chapter~\ref{chap:literature_review}} provides a comprehensive review of related literature in machine learning for NIDS, zero-day anomaly discovery, continual learning paradigms, and experience replay limitations.
-    \item \textbf{Chapter~\ref{chap:system_model}} details the system architecture, mathematical threat model, edge hardware constraints, and the formal formulation of the plasticity-stability trade-off.
-    \item \textbf{Chapter~\ref{chap:proposed_framework}} presents the mathematical derivation, buffer management mechanics, and algorithmic implementation of the proposed Dynamic Continual Learning framework.
-    \item \textbf{Chapter~\ref{chap:experimental_setup}} outlines the experimental methodology, TON\_IoT dataset characteristics, feature preprocessing, zero-day simulation protocol, and formal continual learning evaluation metrics.
-    \item \textbf{Chapter~\ref{chap:results_and_discussion}} presents the exhaustive empirical findings, multi-attack comparison tables, publication-quality visualizations, and in-depth discussions.
-    \item \textbf{Chapter~\ref{chap:conclusion}} concludes the thesis, summarizing key theoretical and empirical contributions, acknowledging limitations, and outlining future research directions.
-\end{itemize}
+\section{Scope and Assumptions}
+\label{sec:scope}
+
+A few boundaries of this work should be stated at the outset. All experiments use flow-level features from a single public dataset, TON\_IoT, so the results show what is achievable on that data rather than across every IoT environment. The adaptation step assumes that labelled samples of the new attack are available once it has been flagged, for example from a security analyst; fully label-free adaptation is outside the scope. The classifier is a Random Forest throughout, chosen for its accuracy and low inference cost. Update times were measured on a general-purpose CPU and are reported as relative comparisons between strategies, not as benchmarks on a specific edge device.
+
+\section{Organisation of the Thesis}
+\label{sec:organisation}
+
+The rest of this thesis is arranged as follows, mapped visually in Figure~\ref{fig:thesis_organisation}. Chapter~\ref{chap:literature_review} reviews earlier work on machine learning for intrusion detection, anomaly-based detection of unseen attacks, and continual learning, with particular attention to replay methods. Chapter~\ref{chap:system_model} describes the deployment setting, the threat model and the formal problem, including the trade-off between learning new attacks and retaining old ones. Chapter~\ref{chap:proposed_framework} presents the proposed two-stage framework, the Dynamic Replay allocation rule and the evaluation metrics used to measure forgetting. Chapter~\ref{chap:results_and_discussion} reports the experiments on TON\_IoT and discusses what they reveal about each update strategy. Finally, Chapter~\ref{chap:conclusion} summarises the findings, notes the limitations of the study and suggests directions for future work.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{results/figures/chapter1/fig1_5_thesis_organisation.pdf}
+    \caption{Structural organisation and sequential progression of chapters in this thesis.}
+    \label{fig:thesis_organisation}
+\end{figure}
