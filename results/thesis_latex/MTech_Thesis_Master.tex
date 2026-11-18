@@ -14,6 +14,8 @@
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{fancyhdr}
+\usepackage{tikz}
+\usetikzlibrary{arrows}
 
 \hypersetup{
     colorlinks=true,
@@ -85,8 +87,10 @@ Machine learning based Network Intrusion Detection Systems (NIDS) for the Intern
 
 \input{results/thesis_latex/chapter1_introduction.tex}
 \input{results/thesis_latex/chapter2_literature_review.tex}
-\input{results/thesis_latex/chapter3_system_model.tex}
-\input{results/thesis_latex/chapter4_proposed_framework.tex}
+\input{results/thesis_latex/chapter3_proposed_work.tex}
+% Superseded by chapter3_proposed_work.tex (kept on disk for reference):
+% \input{results/thesis_latex/chapter3_system_model.tex}
+% \input{results/thesis_latex/chapter4_proposed_framework.tex}
 \input{results/thesis_latex/chapter5_results_and_discussion.tex}
 \input{results/thesis_latex/chapter6_conclusion_and_future_work.tex}
 
@@ -94,7 +98,18 @@ Machine learning based Network Intrusion Detection Systems (NIDS) for the Intern
 % BIBLIOGRAPHY
 % ---------------------------------------------------------
 \newpage
+\begin{singlespace}
 \bibliographystyle{IEEEtran}
 \bibliography{results/thesis_latex/references}
+\end{singlespace}
+\addcontentsline{toc}{chapter}{REFERENCES}
+
+% ---------------------------------------------------------
+% APPENDIX
+% ---------------------------------------------------------
+\appendix
+\begin{appendices}
+\input{results/thesis_latex/appendix.tex}
+\end{appendices}
 
 \end{document}

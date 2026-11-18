@@ -1,152 +1,1025 @@
-\chapter{Empirical Evaluation and In-Depth Discussion}
+\chapter{RESULTS AND INFERENCES}
 \label{chap:results_and_discussion}
+\label{chap:results}
 
-\section{Experimental Methodology and Setup}
-All experimental benchmarks were conducted on the benchmark \textbf{TON\_IoT} network intrusion dataset, extracted from an active edge IoT testbed containing heterogeneous cyber threats and benign sensory network flows. To simulate zero-day deployment conditions, four distinct attack vectors representing varying volumetric characteristics were systematically quarantined during baseline training:
-\begin{enumerate}
-    \item \textbf{Man-in-the-Middle (MITM):} Low-volume, targeted exploit ($\sim$180 adaptation packets).
-    \item \textbf{Ransomware:} Medium-volume, persistent protocol exploitation ($\sim$2,850 adaptation packets).
-    \item \textbf{Cross-Site Scripting (XSS):} High-volume web application vector ($\sim$2,900 adaptation packets).
-    \item \textbf{Backdoor:} High-volume administrative compromise vector ($\sim$3,730 adaptation packets).
-\end{enumerate}
+This chapter presents the empirical evaluation, algorithmic verification, and experimental findings of the proposed two-stage continual intrusion detection framework on the TON\_IoT network telemetry benchmark~\cite{alshammari2020toniot}. Following rigorous IEEE academic standards, the investigation is structured as a cohesive, unified scientific narrative pairing comprehensive quantitative measurements with deep analytical inferences.
 
-To strictly guarantee the absence of data snooping or optimistic leakage, an untouched 80\% holdout evaluation partition was quarantined for each quarantined novel attack class, while historical retention was continuously measured against the untouched test set of known legacy classes.
+The remainder of this chapter is organized as follows. Section~\ref{sec:impl_workflow} establishes the experimental setup, data hygiene protocol, and leave-one-attack-out evaluation matrix. Section~\ref{sec:phase1_4_results} evaluates the closed-world Random Forest baseline on familiar IoT network traffic and empirically demonstrates the catastrophic failure of static models when confronted with unobserved zero-day attacks, substantiated by a complete $10 \times 10$ confusion matrix. Section~\ref{sec:phase5_results} assesses the operational screening efficacy of the unsupervised Isolation Forest novelty screener across benign normal, familiar attack, and novel zero-day traffic streams. Section~\ref{sec:phase6_7_results} benchmarks four continual learning paradigms on rare zero-day intrusions, examining the core trade-offs governing plasticity, stability, memory overhead, and retraining latency. Section~\ref{sec:phase7_1_results} characterizes the memory--retention Pareto frontier through systematic buffer sensitivity sweeps across decreasing memory budgets. Section~\ref{sec:phase8_9_10_results} validates the volume-aware Dynamic Replay rule across four diverse cyber attack families spanning an $18\times$ volumetric range, providing detailed per-class retention breakdowns for ransomware, cross-site scripting, and backdoor intrusions alongside a 20-configuration consolidated benchmark. Finally, Section~\ref{sec:resource_synthesis} evaluates the physical memory footprint, execution latency, and edge deployment viability, verifying compliance against all seven system design requirements.
 
-\section{Evaluation Metrics}
-To rigorously quantify the trade-off between knowledge acquisition, memory conservation, and catastrophic forgetting, we evaluate models along six standardized axes:
-\begin{enumerate}
-    \item \textbf{Novel Attack Plasticity ($F1_{novel}$):} Harmonic mean of Precision and Recall on untouched novel zero-day test packets.
-    \item \textbf{Historical Macro-F1 Stability ($\text{Macro-}F1_{known}$):} Unweighted arithmetic mean of F1-scores across all historical known classes.
-    \item \textbf{Average Catastrophic Forgetting ($\mathcal{F}_{avg}$):} Average decline in per-class F1 across all historical classes from pre-adaptation to post-adaptation:
-    \begin{equation}
-    \mathcal{F}_{avg} = \frac{1}{K} \sum_{c \in \mathcal{C}_{known}} \max\left(0, F1_{c}^{before} - F1_{c}^{after}\right)
-    \end{equation}
-    \item \textbf{Maximum Class Forgetting ($\mathcal{F}_{max}$):} The severe worst-case degradation observed on any single historical class:
-    \begin{equation}
-    \mathcal{F}_{max} = \max_{c \in \mathcal{C}_{known}} \left( F1_{c}^{before} - F1_{c}^{after} \right)
-    \end{equation}
-    \item \textbf{Memory Reduction Ratio (MRR):} The percentage of historical sample storage eliminated relative to full retraining:
-    \begin{equation}
-    \text{MRR} = \left( 1 - \frac{|\mathcal{B}|}{|\mathcal{D}_{train}|} \right) \times 100\%
-    \end{equation}
-    \item \textbf{Edge IoT Viability Index (EIVI):} A composite index $[0, 100]$ balancing plasticity (35\%), stability (35\%), memory reduction (25\%), and adaptation speed (5\%).
-\end{enumerate}
+\section{Experimental Setup and Evaluation Protocol}
+\label{sec:impl_workflow}
 
-\section{Baseline Performance and the Zero-Day Failure Mode}
-Table~\ref{tab:master_strategy_results} presents the comparative evaluation of our proposed Dynamic Replay architecture against the industry-standard baseline paradigms on the benchmark MITM zero-day evaluation scenario.
-
-\begin{table*}[htbp]
-\centering
-\caption{Consolidated Strategy Benchmark Comparison on TON\_IoT (Zero-Day: MITM)}
-\label{tab:master_strategy_results}
-\small
-\begin{tabular}{lcccccc}
-\toprule
-\textbf{Architectural Strategy} & \textbf{Replay Footprint} & \textbf{Memory Reduction} & \textbf{Novel Attack F1} & \textbf{Known Macro-F1} & \textbf{Avg. Forgetting} & \textbf{Max. Forgetting} \\
-\midrule
-Supervised RF Baseline & 127,787 pkts & 0.0\% & 0.0000 & 0.8817 & 0.0000 & 0.0000 \\
-Isolation Forest & 127,787 pkts & 0.0\% & 0.1886$^\dagger$ & N/A & N/A & N/A \\
-Full Retraining & 127,787 pkts & 0.0\% & 0.6483 & \textbf{0.8902} & -0.0002 & 0.0003 \\
-Static Replay ($k=25$/cls) & 225 pkts & 99.82\% & \textbf{0.9804} & 0.8330 & 0.0634 & 0.1266 \\
-Static Replay ($k=50$/cls) & 450 pkts & 99.65\% & 0.9798 & 0.8528 & 0.0414 & 0.0731 \\
-Static Replay ($k=100$/cls) & 900 pkts & 99.30\% & 0.9773 & 0.8665 & 0.0262 & 0.0604 \\
-Static Replay ($k=200$/cls) & 1,800 pkts & 98.59\% & 0.9741 & 0.8723 & 0.0198 & 0.0449 \\
-Static Replay ($k=500$/cls) & 4,500 pkts & 96.48\% & 0.9613 & 0.8801 & 0.0111 & 0.0210 \\
-\midrule
-\textbf{Dynamic Replay (Proposed)} & \textbf{900 pkts} & \textbf{99.30\%} & \textbf{0.9773} & \textbf{0.8665} & \textbf{0.0262} & \textbf{0.0604} \\
-\bottomrule
-\end{tabular}
-\flushleft
-\footnotesize{$^\dagger$ Isolation Forest metric denotes unsupervised anomaly detection recall on novel traffic, not classification F1.}
-\end{table*}
-
-\section{Buffer Sensitivity Analysis: The Adaptation-Retention Frontier}
-To empirically map the sensitivity of the continual learning pipeline to memory constraints, we tested buffer sizes from $k=25$ to $k=500$ samples per class.
-\begin{itemize}
-    \item At $k=25$ samples/class (total 225 packets, 99.82\% reduction), plasticity is maximized ($F1_{MITM} = 0.9804$), but Average Forgetting reaches its peak at $0.0634$ and Maximum Forgetting reaches $0.1266$.
-    \item As $k$ increases to 100 samples/class (900 packets), Average Forgetting plummets to $0.0262$, and Maximum Forgetting drops by over 52\% to $0.0604$.
-    \item Expanding further to $k=500$ samples/class yields marginal additional stability gains ($\mathcal{F}_{avg} = 0.0111$) at the cost of a 500\% increase in memory footprint (4,500 samples).
-\end{itemize}
-This establishes $k=100$ samples per class as the optimal Pareto retention floor ($k_{min} = 100$).
-
-\section{Multi-Attack Generalization across Attack Volumes}
-To prove that the architecture generalizes across diverse attack behaviors and does not overfit to MITM, we benchmarked all strategies across four distinct zero-day attack classes. Table~\ref{tab:multi_attack_results} reports the complete performance breakdown.
-
-\begin{table*}[htbp]
-\centering
-\caption{Multi-Attack Generalization and Volumetric Forgetting Analysis}
-\label{tab:multi_attack_results}
-\small
-\begin{tabular}{llcccccc}
-\toprule
-\textbf{Zero-Day Vector} & \textbf{Strategy} & \textbf{Replay Memory} & \textbf{Memory Saved} & \textbf{New Attack F1} & \textbf{Macro-F1 (Retained)} & \textbf{Avg. Forgetting} & \textbf{Max. Forgetting} \\
-\midrule
-\multirow{3}{*}{\textbf{MITM} (Low Vol)} 
-& Full Retraining & 127,787 & 0.0\% & 0.6483 & 0.8902 & 0.000 & 0.000 \\
-& Static (100/cls) & 900 & 99.30\% & 0.9773 & 0.8665 & 0.0262 & 0.0604 \\
-& \textbf{Dynamic Replay} & \textbf{900} & \textbf{99.30\%} & \textbf{0.9773} & \textbf{0.8665} & \textbf{0.0262} & \textbf{0.0604} \\
-\midrule
-\multirow{3}{*}{\textbf{Ransomware} (Med Vol)} 
-& Full Retraining & 118,528 & 0.0\% & 0.9996 & 0.8668 & 0.0015 & 0.0132 \\
-& Static (100/cls) & 900 & 99.24\% & 0.9997 & 0.8150 & 0.0590 & 0.3245 \\
-& \textbf{Dynamic Replay} & \textbf{2,853} & \textbf{97.59\%} & \textbf{0.9997} & \textbf{0.8304} & \textbf{0.0420} & \textbf{0.2555} \\
-\midrule
-\multirow{3}{*}{\textbf{XSS} (High Vol)} 
-& Full Retraining & 118,351 & 0.0\% & 0.9608 & 0.8696 & 0.0024 & 0.0152 \\
-& Static (100/cls) & 900 & 99.24\% & 0.9988 & 0.8081 & 0.0707 & 0.3972 \\
-& \textbf{Dynamic Replay} & \textbf{2,898} & \textbf{97.55\%} & \textbf{0.9978} & \textbf{0.8337} & \textbf{0.0423} & \textbf{0.2548} \\
-\midrule
-\multirow{3}{*}{\textbf{Backdoor} (High Vol)} 
-& Full Retraining & 115,417 & 0.0\% & 0.9997 & 0.8660 & -0.0003 & 0.0001 \\
-& Static (100/cls) & 900 & 99.22\% & 0.9999 & 0.8198 & 0.0510 & 0.2785 \\
-& \textbf{Dynamic Replay} & \textbf{3,735} & \textbf{96.76\%} & \textbf{0.9999} & \textbf{0.8310} & \textbf{0.0385} & \textbf{0.2228} \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\section{Visual Performance Analysis}
-
-\begin{figure*}[htbp]
-\centering
-\includegraphics[width=0.95\textwidth]{results/figures/master/master_framework_executive_dashboard.png}
-\caption{Comprehensive 6-panel executive dashboard illustrating (A) Novel zero-day attack acquisition (F1), (B) Historical knowledge retention (Macro-F1), (C) Catastrophic forgetting suppression on hardest classes, (D) Replay memory consumption on a log scale, (E) Composite Edge IoT Viability Index, and (F) The empirical Pareto frontier balancing memory overhead against forgetting.}
-\label{fig:master_dashboard}
-\end{figure*}
+To guarantee that no statistical information from withheld attacks or future evaluation partitions leaks into the training pipeline, the framework follows a strict, leakage-free data hygiene protocol and a standardized leave-one-attack-out evaluation methodology. Figure~\ref{fig:impl_pipeline} illustrates the end-to-end execution sequence, spanning telemetry ingestion, de-identification, closed-world baseline fitting, parallel anomaly screening, volume-aware replay buffer construction, and multi-axis continual evaluation.
 
 \begin{figure}[htbp]
+  \centering
+  \tikzstyle{block} = [rectangle, line width=0.75pt, draw, text centered, minimum height=8.5mm, text width=40mm]
+  \tikzstyle{line} = [draw, line width=0.75pt, -latex']
+  \begin{tikzpicture}
+    \node [block] (s1) at (0, 0)      {\bf\footnotesize Step 1: Raw Telemetry Ingestion (211{,}043 rows, 44 cols)};
+    \node [block] (s2) at (6.2, 0)    {\bf\footnotesize Step 2: IP Stripping \& Deduplication (183{,}592 clean rows)};
+    \node [block] (s3) at (6.2, -1.7) {\bf\footnotesize Step 3: Leave-One-Attack-Out Isolation ($K=9$ vs.\ Unseen)};
+    \node [block] (s4) at (0, -1.7)   {\bf\footnotesize Step 4: Train-Only Imputation \& One-Hot Encoding};
+    \node [block] (s5) at (0, -3.4)   {\bf\footnotesize Step 5: Stage 1 Baseline RF \& Isolation Forest Fit};
+    \node [block] (s6) at (6.2, -3.4) {\bf\footnotesize Step 6: Unseen Attack 20/80 Adaptation/Test Split};
+    \node [block] (s7) at (6.2, -5.1) {\bf\footnotesize Step 7: Dynamic Quota Calculation $k_{\text{dyn}} = \Phi(M, K)$};
+    \node [block] (s8) at (0, -5.1)   {\bf\footnotesize Step 8: Buffer Sampling \& Ensemble Retraining};
+    \node [block, text width=102mm] (s9) at (3.1, -6.7) {\bf\footnotesize Step 9: Multi-Axis Continual Evaluation ($F1_{\text{new}}$, $\mathcal{F}_{\text{avg}}$, $\mathcal{F}_{\max}$, BWT, MRR, PSI, EIVI)};
+    \path [line] (s1) -- (s2);
+    \path [line] (s2) -- (s3);
+    \path [line] (s3) -- (s4);
+    \path [line] (s4) -- (s5);
+    \path [line] (s5) -- (s6);
+    \path [line] (s6) -- (s7);
+    \path [line] (s7) -- (s8);
+    \path [line] (s8.south) -- (0, -6.3);
+    \path [line] (s7.south) -- (6.2, -6.3);
+  \end{tikzpicture}
+  \caption{Nine-step experimental implementation and continual evaluation workflow}
+  \label{fig:impl_pipeline}
+\end{figure}
+
+\subsection{Data Hygiene, Leakage Prevention, and De-Identification}
+\label{subsec:data_hygiene}
+
+The raw TON\_IoT network telemetry dataset (\texttt{train\_test\_network.csv}) comprises $211{,}043$ flow records across $44$ network attributes. In raw form, missing connection fields are represented by dash characters (\texttt{'-'}), and each record includes a binary indicator (\texttt{label}) and a ten-class category string (\texttt{type}), alongside source and destination IP addresses (\texttt{src\_ip}, \texttt{dst\_ip}).
+
+To prevent experimental artefacts and guarantee that models learn generalisable flow dynamics rather than testbed identities, four mandatory hygiene steps are executed:
+\begin{enumerate}
+    \item \textbf{Missing Value Standardization:} All \texttt{'-'} string placeholders are mapped to formal missing value markers (\texttt{NaN}).
+    \item \textbf{Target Leakage Prevention:} The binary \texttt{label} attribute is permanently removed from the feature matrix so that ground-truth classification labels cannot leak into input vectors.
+    \item \textbf{Network Identifier Stripping:} Both \texttt{src\_ip} and \texttt{dst\_ip} are stripped. In static testbeds, attacking hosts are assigned dedicated private IP addresses; if IP strings are retained, decision trees split directly on specific host addresses, memorising static node identities rather than behavioural network characteristics.
+    \item \textbf{Exact Row Deduplication:} After removing IP addresses, exact duplicate rows across the remaining attributes are eliminated. Prior to IP removal, the dataset contained $20{,}569$ duplicates; removing host addresses exposed an additional $6{,}882$ identical flows, yielding $27{,}451$ total dropped duplicates and a clean, deduplicated corpus of $183{,}592$ unique records.
+\end{enumerate}
+
+All statistical transformations are fitted strictly on the historical training partition $\mathcal{D}_{\text{train}}$:
+\begin{itemize}
+    \item \textbf{Sparse Attribute Pruning:} Any column containing $50\%$ or more missing entries within $\mathcal{D}_{\text{train}}$ is discarded across all partitions.
+    \item \textbf{Train-Only Imputation:} Missing numerical values are imputed using the column-wise median computed strictly over $\mathcal{D}_{\text{train}}$. Missing categorical fields are imputed using the training mode.
+    \item \textbf{Categorical Encoding:} Categorical attributes (transport protocol \texttt{proto} and connection state \texttt{conn\_state}) are encoded using a one-hot encoder fitted exclusively on $\mathcal{D}_{\text{train}}$, with unobserved runtime categories mapped to all-zero vectors.
+    \item \textbf{Hash-Based Leakage Verification:} 64-bit row hashes computed over the encoded feature matrices confirm that fewer than $0.05\%$ of evaluation rows share identical feature vectors with training records, confirming negligible train--test overlap.
+\end{itemize}
+
+\subsection{Leave-One-Attack-Out Partitioning Protocol}
+\label{subsec:leave_one_out}
+
+To evaluate zero-day adaptation rigorously, the study adopts a Leave-One-Attack-Out experimental protocol across four diverse attack families: Man-in-the-Middle (MITM), Ransomware, Cross-Site Scripting (XSS), and Backdoor. For each experiment:
+\begin{enumerate}
+    \item All records belonging to the withheld attack class $c_{\text{unseen}}$ are isolated into an unobserved partition $\mathcal{D}_{\text{unseen}}$.
+    \item The remaining records belonging to the $K = 9$ known classes ($\mathcal{D}_{\text{known}}$) are partitioned via a stratified 70/30 split into the historical training archive $\mathcal{D}_{\text{train}}$ and the known evaluation set $\mathcal{D}_{\text{test\_known}}$.
+    \item The withheld attack partition $\mathcal{D}_{\text{unseen}}$ is divided chronologically into an adaptation batch $\mathcal{D}_{\text{new}}$ ($20\%$, comprising $M$ flows) and an untouched evaluation batch $\mathcal{D}_{\text{eval\_new}}$ ($80\%$).
+\end{enumerate}
+
+Table~\ref{tab:preprocessing_audit} summarizes the resulting flow counts across all four leave-one-attack-out experiments.
+
+\begin{table}[htbp]
 \centering
-\includegraphics[width=0.48\textwidth]{results/figures/master/publication_iot_edge_viability_radar.png}
-\caption{Multi-criteria radar chart evaluating architectural viability for edge IoT nodes across memory efficiency, novelty plasticity, legacy stability, execution latency, and class imbalance resilience.}
-\label{fig:radar_viability}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Dataset partitioning and sample counts across the four leave-one-attack-out experiments}
+\label{tab:preprocessing_audit}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|r|r|}
+\hline
+\textbf{Withheld Attack ($c_{\text{unseen}}$)} & \textbf{Known Train $|\mathcal{D}_{\text{train}}|$} & \textbf{Known Test $|\mathcal{D}_{\text{test\_known}}|$} & \textbf{Unseen Total} & \textbf{Adapt Batch $M$ (20\%)} & \textbf{Unseen Eval (80\%)} \\ \hline
+MITM (Low Volume)         & 127{,}787 & 54{,}766 & 1{,}039  & 207     & 832 \\
+Ransomware (Med Volume)   & 118{,}528 & 50{,}798 & 14{,}266 & 2{,}853 & 11{,}413 \\
+XSS (High Volume)         & 118{,}351 & 50{,}722 & 14{,}519 & 2{,}903 & 11{,}616 \\
+Backdoor (High Volume)    & 115{,}417 & 49{,}465 & 18{,}710 & 3{,}742 & 14{,}968 \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Benchmarked Adaptation Strategies and Continual Metrics}
+\label{subsec:strategies_and_metrics}
+
+When the confirmed novel attack batch $\mathcal{D}_{\text{new}}$ arrives at Stage~2, four continual learning paradigms are benchmarked:
+\begin{enumerate}
+    \item \textbf{No Update Baseline:} The initial Random Forest model is evaluated without modification ($F1_{\text{new}} = 0.0000$).
+    \item \textbf{Strategy A (Full Historical Retraining):} The model is completely retrained on all historical data merged with the new attack batch ($\mathcal{B} = \mathcal{D}_{\text{train}}$, $|\mathcal{B}| = 115{,}417\text{--}127{,}787$).
+    \item \textbf{Strategy B (Class-Balanced Static Replay):} A fixed quota $k \in \{25, 50, 100, 200, 500\}$ is sampled uniformly from each known class ($|\mathcal{B}| = 9\,k$).
+    \item \textbf{Proposed Dynamic Volume Replay:} The per-class quota $k_{\text{dyn}}$ is dynamically computed based on incoming batch size $M$:
+    \begin{equation}
+    k_{\text{dyn}} = \min\!\left( k_{\max},\; \max\!\left( k_{\min},\; \left\lfloor \frac{M \cdot \alpha}{K} \right\rfloor \right) \right), \qquad \alpha = 1.0, \; k_{\min} = 100, \; k_{\max} = 555.
+    \end{equation}
+\end{enumerate}
+
+Adaptation performance is quantified across seven standardized metrics:
+\begin{itemize}
+    \item \textbf{Novel Attack Plasticity ($F1_{\text{new}}$):} F1 score evaluated on the untouched evaluation set $\mathcal{D}_{\text{eval\_new}}$.
+    \item \textbf{Average Forgetting ($\mathcal{F}_{\text{avg}}$) and Maximum Forgetting ($\mathcal{F}_{\max}$):} The mean and worst-case drop in per-class F1 across the $K=9$ known classes relative to pre-adaptation baseline performance.
+    \item \textbf{Backward Transfer (BWT):} Defined as $\text{BWT} = -\mathcal{F}_{\text{avg}}$, measuring retention or enhancement of historical knowledge.
+    \item \textbf{Memory Reduction Ratio (MRR):} Percentage reduction in retained exemplar storage relative to full retraining: $\text{MRR} = 100 \times (1 - |\mathcal{B}| / |\mathcal{D}_{\text{train}}|)$.
+    \item \textbf{Plasticity--Stability Index (PSI):} The harmonic mean of novel-attack F1 and retained historical stability:
+    \begin{equation}
+    \text{PSI} = \frac{2 \cdot F1_{\text{new}} \cdot (1 - \max(0, \mathcal{F}_{\text{avg}}))}{F1_{\text{new}} + (1 - \max(0, \mathcal{F}_{\text{avg}}))}.
+    \end{equation}
+    \item \textbf{Edge IoT Viability Index (EIVI):} A composite metric (0--100) weighting plasticity ($35\%$), stability ($35\%$), memory reduction ($25\%$), and update speed ($5\%$).
+\end{itemize}
+
+\section{Closed-World Baseline Evaluation and Failure on Unseen Attacks}
+\label{sec:phase1_4_results}
+
+We first evaluate the baseline Random Forest classifier under the conventional closed-world operational paradigm. The model is trained exclusively on the nine known traffic classes ($127{,}787$ flows) with MITM traffic completely withheld, and subsequently evaluated on both the clean known-class test split ($54{,}766$ flows) and the unified 10-class evaluation stream ($55{,}805$ flows) containing the unobserved MITM flows.
+
+\subsection{Initial vs.\ Deduplicated Clean Baseline Comparison}
+\label{subsec:initial_vs_clean}
+
+Table~\ref{tab:baseline_comparison} compares the per-class F1 scores of the baseline Random Forest before and after removing IP addresses and deduplicating exact flow matches. Figure~\ref{fig:known_vs_unseen_tikz} plots the clean baseline's F1 across all ten TON\_IoT categories.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Comparison of Initial vs.\ Clean deduplicated Random Forest baseline on the combined 10-class test split (MITM withheld from training)}
+\label{tab:baseline_comparison}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|l|}
+\hline
+\textbf{Class / Metric} & \textbf{Initial Baseline} & \textbf{Clean Baseline} & \textbf{Training Status} \\ \hline
+Backdoor F1          & 0.9996 & 0.9996 & Known training class ($c=0$) \\
+Ransomware F1        & 0.9995 & 0.9993 & Known training class ($c=6$) \\
+Scanning F1          & 0.9870 & 0.9882 & Known training class ($c=7$) \\
+Normal F1            & 0.9852 & 0.9855 & Known training class ($c=4$) \\
+DDoS F1              & 0.9785 & 0.9840 & Known training class ($c=1$) \\
+Password F1          & 0.9791 & 0.9784 & Known training class ($c=5$) \\
+Injection F1         & 0.9744 & 0.9719 & Known training class ($c=3$) \\
+XSS F1               & 0.9679 & 0.9692 & Known training class ($c=8$) \\
+DoS F1               & 0.9401 & 0.9411 & Known training class ($c=2$) \\ \hline
+\textbf{MITM F1 (Unseen)} & \textbf{0.0000} & \textbf{0.0000} & \textbf{Withheld from training ($c=9$)} \\ \hline
+Overall Accuracy     & 0.9711 & 0.9717 & Across all 55{,}805 test flows \\
+Known 9-Class Mean F1 & 0.9790 & 0.9797 & Unweighted mean over 9 known classes on mixed test set \\
+Known-Only Test Macro-F1 & 0.9889 & 0.9890 & Unweighted mean on clean 54{,}766-flow known test set \\
+Overall 10-Class Macro-F1 & 0.8811 & 0.8817 & Includes 0.0000 F1 on unseen MITM \\
+Overall Weighted-F1  & 0.9622 & 0.9627 & Support-weighted across 55{,}805 flows \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (12.2,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,5.5);
+    \node[rotate=90] at (-1.1,2.7) {\footnotesize Per-Class F1 Score};
+    \draw (0,0) -- (-0.1,0) node[left] {\scriptsize 0.0};
+    \draw (0,1) -- (-0.1,1) node[left] {\scriptsize 0.2};
+    \draw (0,2) -- (-0.1,2) node[left] {\scriptsize 0.4};
+    \draw (0,3) -- (-0.1,3) node[left] {\scriptsize 0.6};
+    \draw (0,4) -- (-0.1,4) node[left] {\scriptsize 0.8};
+    \draw (0,5) -- (-0.1,5) node[left] {\scriptsize 1.0};
+    % bars (1 unit y = 0.20 F1 -> y = 5 * F1)
+    \draw[fill=gray!35] (0.3,0) rectangle (1.1,4.998); \node[above] at (0.7,5.0) {\tiny .999}; \node[below] at (0.7,-0.08) {\tiny Backdoor};
+    \draw[fill=gray!35] (1.45,0) rectangle (2.25,4.996); \node[above] at (1.85,5.0) {\tiny .999}; \node[below] at (1.85,-0.08) {\tiny Ransom};
+    \draw[fill=gray!35] (2.6,0) rectangle (3.4,4.941); \node[above] at (3.0,4.94) {\tiny .988}; \node[below] at (3.0,-0.08) {\tiny Scan};
+    \draw[fill=gray!35] (3.75,0) rectangle (4.55,4.927); \node[above] at (4.15,4.93) {\tiny .986}; \node[below] at (4.15,-0.08) {\tiny Normal};
+    \draw[fill=gray!35] (4.9,0) rectangle (5.7,4.920); \node[above] at (5.3,4.92) {\tiny .984}; \node[below] at (5.3,-0.08) {\tiny DDoS};
+    \draw[fill=gray!35] (6.05,0) rectangle (6.85,4.892); \node[above] at (6.45,4.89) {\tiny .978}; \node[below] at (6.45,-0.08) {\tiny Passwd};
+    \draw[fill=gray!35] (7.2,0) rectangle (8.0,4.860); \node[above] at (7.6,4.86) {\tiny .972}; \node[below] at (7.6,-0.08) {\tiny Inject};
+    \draw[fill=gray!35] (8.35,0) rectangle (9.15,4.846); \node[above] at (8.75,4.85) {\tiny .969}; \node[below] at (8.75,-0.08) {\tiny XSS};
+    \draw[fill=gray!35] (9.5,0) rectangle (10.3,4.705); \node[above] at (9.9,4.71) {\tiny .941}; \node[below] at (9.9,-0.08) {\tiny DoS};
+    \draw[fill=gray!80] (10.65,0) rectangle (11.45,0.04); \node[above] at (11.05,0.05) {\scriptsize \bf 0.000}; \node[below] at (11.05,-0.08) {\tiny \bf MITM};
+  \end{tikzpicture}
+  \caption{Per-class F1 scores of the clean Random Forest baseline across the nine known classes and the withheld MITM class}
+  \label{fig:known_vs_unseen_tikz}
+\end{figure}
+
+\subsection{Complete $10 \times 10$ Confusion Matrix and Misrouting Analysis}
+\label{subsec:confusion_matrix}
+
+Table~\ref{tab:full_confusion_matrix} presents the complete $10 \times 10$ confusion matrix evaluated across all $55{,}805$ test flows. Table~\ref{tab:mitm_misclassification} coupled with Figure~\ref{fig:mitm_misclass_tikz} breaks down the exact destination labels assigned to the withheld MITM flows.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Complete $10 \times 10$ confusion matrix of the baseline Random Forest on the combined test split (rows: ground-truth class; columns: predicted class)}
+\label{tab:full_confusion_matrix}
+\begin{tabular}{|l|r|r|r|r|r|r|r|r|r|r|r|}
+\hline
+\textbf{True $\backslash$ Pred} & \textbf{Back} & \textbf{DDoS} & \textbf{DoS} & \textbf{Inj} & \textbf{Norm} & \textbf{Pass} & \textbf{Rans} & \textbf{Scan} & \textbf{XSS} & \textbf{MITM} & \textbf{Total} \\ \hline
+\textbf{Backdoor}   & 5{,}610 & 0 & 0 & 3 & 0 & 0 & 0 & 0 & 0 & 0 & 5{,}613 \\
+\textbf{DDoS}       & 0 & 5{,}883 & 4 & 37 & 17 & 4 & 3 & 0 & 48 & 0 & 5{,}996 \\
+\textbf{DoS}        & 0 & 0 & 4{,}319 & 8 & 17 & 15 & 0 & 40 & 2 & 0 & 4{,}401 \\
+\textbf{Injection}  & 2 & 35 & 2 & 5{,}830 & 3 & 5 & 0 & 21 & 91 & 0 & 5{,}989 \\
+\textbf{Normal}     & 0 & 6 & 5 & 2 & 12{,}574 & 2 & 2 & 1 & 1 & 0 & 12{,}593 \\
+\textbf{Password}   & 0 & 1 & 13 & 4 & 4 & 5{,}923 & 0 & 9 & 0 & 0 & 5{,}954 \\
+\textbf{Ransomware} & 0 & 0 & 0 & 0 & 0 & 0 & 4{,}280 & 0 & 0 & 0 & 4{,}280 \\
+\textbf{Scanning}   & 0 & 0 & 21 & 5 & 4 & 7 & 0 & 5{,}547 & 0 & 0 & 5{,}584 \\
+\textbf{XSS}        & 0 & 20 & 0 & 72 & 3 & 0 & 0 & 0 & 4{,}261 & 0 & 4{,}356 \\ \hline
+\textbf{MITM (Unseen)} & \textbf{0} & \textbf{16} & \textbf{414} & \textbf{47} & \textbf{304} & \textbf{198} & \textbf{1} & \textbf{25} & \textbf{34} & \textbf{0} & \textbf{1{,}039} \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\caption{Distribution of clean baseline Random Forest predictions on the 1{,}039 deduplicated unseen MITM test flows (last row of Table~\ref{tab:full_confusion_matrix})}
+\label{tab:mitm_misclassification}
+\begin{tabular}{|l|r|r|p{6.8cm}|}
+\hline
+\textbf{Predicted Known Label} & \textbf{Flow Count} & \textbf{Share (\%)} & \textbf{Operational Consequence at the Gateway} \\ \hline
+DoS        & 414 & 39.85 & False category alert; drops DoS precision and F1 from 0.9855 to 0.9411 \\
+Normal     & 304 & 29.26 & Silent false negative; MITM traffic passes uninspected into LAN \\
+Password   & 198 & 19.06 & Misdirects incident response toward credential brute-force \\
+Injection  & 47  & 4.52  & False application-layer injection alert \\
+XSS        & 34  & 3.27  & False web-script alert \\
+Scanning   & 25  & 2.41  & False reconnaissance alert \\
+DDoS       & 16  & 1.54  & False volumetric flood alert \\
+Ransomware & 1   & 0.10  & Single flow assigned \\
+Backdoor   & 0   & 0.00  & No flows assigned \\
+MITM (True Class) & 0 & 0.00 & Zero true positives ($F1_{\text{MITM}} = 0.0000$) \\ \hline
+\textbf{Total} & \textbf{1{,}039} & \textbf{100.00} & \textbf{100\% misclassification of unseen attack} \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (11.2,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,5.2);
+    \node[rotate=90] at (-1.1,2.5) {\footnotesize Share of unseen MITM flows (\%)};
+    \draw (0,0) -- (-0.1,0) node[left] {\scriptsize 0};
+    \draw (0,1) -- (-0.1,1) node[left] {\scriptsize 10};
+    \draw (0,2) -- (-0.1,2) node[left] {\scriptsize 20};
+    \draw (0,3) -- (-0.1,3) node[left] {\scriptsize 30};
+    \draw (0,4) -- (-0.1,4) node[left] {\scriptsize 40};
+    \draw (0,5) -- (-0.1,5) node[left] {\scriptsize 50};
+    % bars (1 unit y = 10%)
+    \draw[fill=gray!45] (0.5,0) rectangle (1.4,3.985); \node[above] at (0.95,3.99) {\scriptsize 39.9\%}; \node[below] at (0.95,-0.08) {\scriptsize DoS};
+    \draw[fill=gray!20] (1.8,0) rectangle (2.7,2.926); \node[above] at (2.25,2.93) {\scriptsize 29.3\%}; \node[below] at (2.25,-0.08) {\scriptsize Normal};
+    \draw[fill=gray!45] (3.1,0) rectangle (4.0,1.906); \node[above] at (3.55,1.91) {\scriptsize 19.1\%}; \node[below] at (3.55,-0.08) {\scriptsize Password};
+    \draw[fill=gray!45] (4.4,0) rectangle (5.3,0.452); \node[above] at (4.85,0.46) {\scriptsize 4.5\%};  \node[below] at (4.85,-0.08) {\scriptsize Injection};
+    \draw[fill=gray!45] (5.7,0) rectangle (6.6,0.327); \node[above] at (6.15,0.33) {\scriptsize 3.3\%};  \node[below] at (6.15,-0.08) {\scriptsize XSS};
+    \draw[fill=gray!45] (7.0,0) rectangle (7.9,0.241); \node[above] at (7.45,0.25) {\scriptsize 2.4\%};  \node[below] at (7.45,-0.08) {\scriptsize Scanning};
+    \draw[fill=gray!45] (8.3,0) rectangle (9.2,0.154); \node[above] at (8.75,0.16) {\scriptsize 1.5\%};  \node[below] at (8.75,-0.08) {\scriptsize DDoS};
+    \draw[fill=gray!80] (9.6,0) rectangle (10.5,0.0);  \node[above] at (10.05,0.0) {\scriptsize 0.0\%};  \node[below] at (10.05,-0.08) {\scriptsize MITM};
+  \end{tikzpicture}
+  \caption{Misclassification destination breakdown of the 1{,}039 unseen MITM flows under the clean Random Forest baseline (one flow assigned to ransomware is omitted from the plot)}
+  \label{fig:mitm_misclass_tikz}
+\end{figure}
+
+\textbf{Technical Inferences on Baseline Behavior and Closed-World Failure:}
+\begin{enumerate}
+    \item \textbf{Structural Impossibility of Closed-World Zero-Day Recognition:} On the 54{,}766 known-class test flows, the Random Forest achieves $99.02\%$ accuracy and $0.9890$ Macro-F1 (Table~\ref{tab:full_confusion_matrix}). Even on the combined 55{,}805-flow stream, headline accuracy remains seemingly high at $97.17\%$. Yet, because the tree ensemble's leaves map strictly to the $K = 9$ known training classes, every single flow of the withheld MITM class is misclassified ($F1_{\text{MITM}} = 0.0000$).
+    \item \textbf{Dual Operational Hazard (Silent Evasion vs.\ Collateral Precision Loss):} The misrouted flows create two distinct operational failures at the edge gateway. The $29.26\%$ of MITM flows routed to \texttt{normal} evade detection completely, entering the protected IoT subnet silently. Simultaneously, the $39.85\%$ routed to \texttt{dos} contaminate DoS alerts, dragging DoS precision down from $0.989$ to $0.903$ and reducing DoS F1 from $0.9855$ to $0.9411$.
+\end{enumerate}
+
+\section{Unsupervised Anomaly Screening and Novelty Detection}
+\label{sec:phase5_results}
+
+Having established the total failure of static supervised classification on unseen traffic, we evaluate whether the unsupervised Isolation Forest screener (Module M3, $T = 100$ trees, \texttt{contamination='auto'}) can reliably flag unfamiliar flows without requiring prior labels or attack signatures. Table~\ref{tab:phase5_iso_breakdown} reports the empirical screening counts across Known Normal, Known Attack, and Unseen MITM test partitions, while Figures~\ref{fig:phase5_comparison_tikz} and~\ref{fig:phase5_partition_rates_tikz} illustrate the resulting anomaly score distributions.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Isolation Forest binary screening breakdown across Known Normal, Known Attack, and Unseen MITM test partitions}
+\label{tab:phase5_iso_breakdown}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|l|}
+\hline
+\textbf{Test Partition} & \textbf{Total Flows} & \textbf{Predicted Inlier (0)} & \textbf{Flagged Anomaly (1)} & \textbf{Flagged Rate (\%)} \\ \hline
+Known Normal Traffic      & 12{,}593 & 11{,}722 & 871   & 6.92\% (False-Positive Rate) \\
+Known Attack Traffic      & 42{,}173 & 41{,}036 & 1{,}137 & 2.70\% (Known Attack Flag Rate) \\
+Unseen MITM Attack Traffic & 1{,}039  & 843      & 196   & 18.86\% (Novelty Recall) \\ \hline
+\textbf{Combined Test Stream} & \textbf{55{,}805} & \textbf{53{,}601} & \textbf{2{,}204} & \textbf{3.95\% Overall Flag Rate} \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (9.5,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,4.5);
+    \node[rotate=90] at (-1.2,2.2) {\footnotesize Score / Rate on Unseen MITM};
+    % y ticks (1 unit = 0.10)
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.00};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.10};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.20};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.30};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.40};
+    % Group 1: Detection Rate (Recall)
+    \draw[fill=gray!30] (1.2,0) rectangle (2.2,0.03);  \node[above] at (1.7,0.04) {\scriptsize 0.000};
+    \draw[fill=gray!70] (2.3,0) rectangle (3.3,1.886); \node[above] at (2.8,1.89) {\scriptsize 0.189};
+    \node[below] at (2.25,-0.12) {\footnotesize Unseen MITM Recall};
+    % Group 2: MITM F1
+    \draw[fill=gray!30] (5.5,0) rectangle (6.5,0.03);  \node[above] at (6.0,0.04) {\scriptsize 0.000};
+    \draw[fill=gray!70] (6.6,0) rectangle (7.6,1.208); \node[above] at (7.1,1.22) {\scriptsize 0.121};
+    \node[below] at (6.55,-0.12) {\footnotesize Unseen MITM F1 Score};
+    % Legend
+    \draw[fill=gray!30] (4.8,3.9) rectangle (5.3,4.2); \node[right] at (5.4,4.05) {\scriptsize Supervised Random Forest (M2)};
+    \draw[fill=gray!70] (4.8,3.4) rectangle (5.3,3.7); \node[right] at (5.4,3.55) {\scriptsize Unsupervised Isolation Forest (M3)};
+  \end{tikzpicture}
+  \caption{Comparison of unseen MITM recall and F1 between the supervised Random Forest and the unsupervised Isolation Forest screener}
+  \label{fig:phase5_comparison_tikz}
 \end{figure}
 
 \begin{figure}[htbp]
-\centering
-\includegraphics[width=0.48\textwidth]{results/figures/master/publication_catastrophic_forgetting_mitigation.png}
-\caption{Maximum catastrophic forgetting comparison across attack volumes, demonstrating how Dynamic Replay successfully caps legacy accuracy degradation compared to static buffer exhaustion.}
-\label{fig:forgetting_mitigation}
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (9.8,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,4.6);
+    \node[rotate=90] at (-1.2,2.2) {\footnotesize Anomaly Flag Rate (\%)};
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0\%};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 5\%};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 10\%};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 15\%};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 20\%};
+    % bars (1 unit = 5%)
+    \draw[fill=gray!25] (1.0,0) rectangle (2.4,1.384); \node[above] at (1.7,1.39) {\scriptsize 6.92\% (871/12{,}593)}; \node[below] at (1.7,-0.12) {\footnotesize Known Normal};
+    \draw[fill=gray!45] (4.0,0) rectangle (5.4,0.540); \node[above] at (4.7,0.55) {\scriptsize 2.70\% (1{,}137/42{,}173)}; \node[below] at (4.7,-0.12) {\footnotesize Known Attacks};
+    \draw[fill=gray!80] (7.0,0) rectangle (8.4,3.772); \node[above] at (7.7,3.78) {\scriptsize \bf 18.86\% (196/1{,}039)}; \node[below] at (7.7,-0.12) {\footnotesize \bf Unseen MITM};
+  \end{tikzpicture}
+  \caption{Percentage of flows flagged as anomalous by the Isolation Forest across the three test partitions}
+  \label{fig:phase5_partition_rates_tikz}
 \end{figure}
 
-\section{Key Technical Findings and Discussion}
+\textbf{Technical Inferences on Unsupervised Anomaly Screening:}
+\begin{enumerate}
+    \item \textbf{Sevenfold Novelty Elevation Over Known Attacks:} Because the Isolation Forest is fitted on $\mathcal{D}_{\text{train}}$ (which includes normal traffic and eight known attack classes), familiar attack categories sit in high-density regions of feature space and are flagged only $2.70\%$ of the time. In contrast, unseen MITM flows populate previously unobserved, sparse regions and are flagged at $18.86\%$---nearly seven times the known-attack rate.
+    \item \textbf{Justification of the Two-Stage Architecture:} Flagging $196$ out of $1{,}039$ MITM flows provides a strong anomaly signal in the quarantine queue $\mathcal{Q}$ to alert human analysts. However, an $18.86\%$ recall with a $6.92\%$ false-positive rate confirms that unsupervised screening cannot replace supervised classification. Instead, it serves as an adaptation trigger, initiating Stage~2 continual retraining to extend the supervised model to $K+1$ classes.
+\end{enumerate}
 
-\subsection{Finding 1: Zero-Day Blindness of Supervised Models}
-Across all four test cases, the baseline Random Forest yielded exactly \textbf{0.000 F1} for novel attacks. Because supervised algorithms enforce a closed-world decision boundary, unseen threat vectors are forced into misclassification (e.g., MITM packets were falsely assigned to DoS and Normal traffic), experimentally proving the critical necessity of lifelong learning.
+\section{Continual Model Adaptation on Rare Zero-Day Intrusions}
+\label{sec:phase6_7_results}
 
-\subsection{Finding 2: The Class Imbalance Pitfall of Full Retraining}
-A surprising and crucial finding emerged when comparing Full Retraining to our Replay buffers: Full Retraining achieved only \textbf{0.6483 F1} on novel MITM traffic, whereas Dynamic Replay achieved \textbf{0.9773 F1} (+32.9\% improvement). This occurs because retraining on the massive historical dataset ($\sim$127,000 packets) induces severe class imbalance against the compact zero-day novelty ($\sim$180 packets). By utilizing a balanced replay buffer, our dynamic framework ensures proportional representation during split optimization.
+Following verification of the novel attack alert, the gateway must rapidly adapt its decision boundaries. To evaluate adaptation under extreme data scarcity, the $1{,}039$ MITM flows were partitioned into an adaptation batch of $M = 207$ flows ($\mathcal{D}_{\text{new}}$) and an untouched evaluation batch of $832$ flows ($\mathcal{D}_{\text{eval\_new}}$). Three update strategies were benchmarked against the unadapted baseline: Strategy~A (Full Historical Retraining on all $127{,}787$ old flows $+ 207$ MITM flows), Strategy~B (Class-Balanced Static Replay with $k = 100$ flows per known class $= 900$ old flows $+ 207$ MITM flows), and Strategy~C (New Attack Only on the $207$ MITM flows).
 
-\subsection{Finding 3: Volumetric Adaptation Prevents Forgetting Spikes}
-While a static buffer of 100 samples per class provides near-perfect memory reduction ($>99.2\%$), it introduces severe vulnerability to large volumetric attacks. When encountering high-volume vectors like XSS and Backdoor, the incoming attack volume ($>$3,000 samples) severely outnumbered the static 900-sample buffer, causing Maximum Forgetting to spike to \textbf{39.72\%}. 
+Table~\ref{tab:phase7_full_comparison} summarizes the eleven evaluation metrics across all strategies. Table~\ref{tab:phase6_7_per_class_detail} details per-class F1 performance across all ten classes for Full Retraining versus Class-Balanced Replay ($k=100$), and Figures~\ref{fig:phase7_trilemma_tikz} and~\ref{fig:phase6_7_per_class_tikz} plot the resulting stability and forgetting distributions.
 
-Our Dynamic Replay rule dynamically expanded the replay allocation to match incoming volume ($k \approx 310-415$ samples/class), slashing Maximum Forgetting by \textbf{35.8\%} (from 0.397 down to 0.254 on XSS) while still maintaining a remarkable \textbf{$>96.7\%$} memory reduction.
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Comprehensive comparison of continual update strategies on the held-out MITM attack ($M = 207$ adaptation flows, $832$ evaluation flows)}
+\label{tab:phase7_full_comparison}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|r|}
+\hline
+\textbf{Evaluation Metric} & \textbf{Baseline (No Update)} & \textbf{Strategy C (New Only)} & \textbf{Strategy A (Full Replay)} & \textbf{Strategy B (Replay $k=100$)} \\ \hline
+Historical Replay Samples       & --        & 0         & 127{,}787 & 900 \\
+New MITM Adaptation Samples     & 0         & 207       & 207       & 207 \\
+Total Adaptation Corpus Size    & --        & 207       & 127{,}994 & 1{,}107 \\
+Replay Storage Reduction (\%)   & --        & 100.00\%  & 0.00\%    & 99.30\% \\ \hline
+New MITM Precision              & 0.0000    & 1.0000$^\ast$ & 1.0000 & 1.0000 \\
+New MITM Recall                 & 0.0000    & 1.0000$^\ast$ & 0.4796 & 0.9555 \\
+\textbf{New MITM F1 Score}      & \textbf{0.0000} & \textbf{1.0000}$^\ast$ & \textbf{0.6483} & \textbf{0.9773} \\ \hline
+Known-Class Accuracy            & 0.9902    & 0.0000    & 0.9900    & 0.9555 \\
+Known 9-Class Macro-F1          & 0.9890    & 0.0000    & 0.9891    & 0.9628 \\
+Logged 10-Label Macro-F1        & --        & 0.0000    & 0.8902    & 0.8665 \\
+Known Weighted-F1               & 0.9902    & 0.0000    & 0.9903    & 0.9643 \\ \hline
+Average Forgetting ($\mathcal{F}_{\text{avg}}$) & 0.0000 & 0.9890 & $-0.0002$ & 0.0262 \\
+Maximum Forgetting ($\mathcal{F}_{\max}$)       & 0.0000 & 0.9996 & 0.0003    & 0.0604 \\
+Wall-Clock Retraining Time (s)  & --        & 0.0500    & 0.7581    & 0.0621 \\ \hline
+\end{tabular}%
+}
+\\[2pt]
+{\footnotesize $^\ast$Degenerate single-class tree ensemble: outputs MITM for $100\%$ of test inputs, completely destroying all known classes.}
+\end{table}
 
-\subsection{Finding 4: Edge IoT Computational Viability}
-In terms of runtime performance, model updates under Dynamic Replay executed in under \textbf{0.085 seconds}, compared to multiple seconds for full dataset retraining. This ultra-low computational latency ensures that edge gateways (e.g., Raspberry Pi, industrial PLCs, smart home hubs) can perform autonomous on-device updates without experiencing buffer overflows or service interruption.
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Per-class F1 comparison on the known test set and unseen MITM evaluation set: Baseline vs.\ Full Retraining vs.\ Class-Balanced Replay ($k=100$)}
+\label{tab:phase6_7_per_class_detail}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|r|r|}
+\hline
+\textbf{Traffic Class} & \textbf{F1 Before} & \textbf{Full Replay F1} & \textbf{Full $\Delta_c$} & \textbf{Replay ($k=100$) F1} & \textbf{Replay $\Delta_c$} \\ \hline
+Backdoor    & 0.9996 & 0.9996 & $+0.0000$ & 0.9953 & $+0.0042$ \\
+Ransomware  & 0.9994 & 0.9994 & $+0.0000$ & 0.9794 & $+0.0201$ \\
+Normal      & 0.9973 & 0.9975 & $-0.0002$ & 0.9713 & $+0.0261$ \\
+Password    & 0.9946 & 0.9948 & $-0.0002$ & 0.9797 & $+0.0149$ \\
+Scanning    & 0.9904 & 0.9905 & $-0.0001$ & 0.9799 & $+0.0105$ \\
+DoS         & 0.9855 & 0.9852 & $+0.0003$ & 0.9677 & $+0.0179$ \\
+DDoS        & 0.9853 & 0.9855 & $-0.0002$ & 0.9318 & $+0.0535$ \\
+Injection   & 0.9757 & 0.9754 & $+0.0003$ & 0.9474 & $+0.0284$ \\
+XSS         & 0.9729 & 0.9743 & $-0.0014$ & 0.9125 & $+0.0604$ ($\mathcal{F}_{\max}$) \\ \hline
+\textbf{9 Known Classes Mean} & \textbf{0.9890} & \textbf{0.9891} & $\boldsymbol{-0.0002}$ & \textbf{0.9628} & $\boldsymbol{+0.0262}$ ($\mathcal{F}_{\text{avg}}$) \\ \hline
+\textbf{MITM (New Attack)} & \textbf{0.0000} & \textbf{0.6483} & \textbf{Rec: 0.4796} & \textbf{0.9773} & \textbf{Rec: 0.9555} \\ \hline
+\end{tabular}%
+}
+\end{table}
 
-\section{Sustainability and UN SDG Alignment}
-The proposed architecture directly supports the United Nations Sustainable Development Goals:
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (11.0,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,5.5);
+    \node[rotate=90] at (-1.1,2.7) {\footnotesize F1 Score};
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.0};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.2};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.4};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.6};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.8};
+    \draw (0,5) -- (-0.12,5) node[left] {\scriptsize 1.0};
+    % Group 1: Baseline
+    \draw[fill=gray!30] (0.6,0) rectangle (1.3,0.03);  \node[above] at (0.95,0.04) {\scriptsize 0.000};
+    \draw[fill=gray!70] (1.35,0) rectangle (2.05,4.945); \node[above] at (1.7,4.95) {\scriptsize 0.989};
+    \node[below] at (1.32,-0.12) {\scriptsize Baseline};
+    % Group 2: New Only
+    \draw[fill=gray!30] (3.1,0) rectangle (3.8,5.00);  \node[above] at (3.45,5.00) {\scriptsize 1.000$^\ast$};
+    \draw[fill=gray!70] (3.85,0) rectangle (4.55,0.03); \node[above] at (4.2,0.04) {\scriptsize 0.000};
+    \node[below] at (3.82,-0.12) {\scriptsize New Only};
+    % Group 3: Full Retraining
+    \draw[fill=gray!30] (5.6,0) rectangle (6.3,3.241); \node[above] at (5.95,3.24) {\scriptsize 0.648};
+    \draw[fill=gray!70] (6.35,0) rectangle (7.05,4.945); \node[above] at (6.7,4.95) {\scriptsize 0.989};
+    \node[below] at (6.32,-0.12) {\scriptsize Full Replay};
+    % Group 4: Replay k=100
+    \draw[fill=gray!30] (8.1,0) rectangle (8.8,4.886); \node[above] at (8.45,4.89) {\scriptsize 0.977};
+    \draw[fill=gray!70] (8.85,0) rectangle (9.55,4.814); \node[above] at (9.2,4.82) {\scriptsize 0.963};
+    \node[below] at (8.82,-0.12) {\scriptsize Replay ($k=100$)};
+    % Legend
+    \draw[fill=gray!30] (2.2,4.8) rectangle (2.7,5.1); \node[right] at (2.8,4.95) {\scriptsize New MITM F1 (Plasticity)};
+    \draw[fill=gray!70] (2.2,4.3) rectangle (2.7,4.6); \node[right] at (2.8,4.45) {\scriptsize Known 9-Class F1 (Stability)};
+  \end{tikzpicture}
+  \caption{Plasticity (New MITM F1) vs.\ Stability (Known 9-Class F1) across the four continual update strategies}
+  \label{fig:phase7_trilemma_tikz}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (11.5,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,4.5);
+    \node[rotate=90] at (-1.2,2.2) {\footnotesize Per-Class Forgetting $\Delta_c$ ($k=100$)};
+    % y ticks (1 unit = 0.02 forgetting -> y = 50 * delta)
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.00};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.02};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.04};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.06};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.08};
+    % 9 classes sorted by forgetting under k=100 on MITM run
+    \draw[fill=gray!35] (0.4,0) rectangle (1.2,0.21);  \node[above] at (0.8,0.22)  {\tiny .004}; \node[below] at (0.8,-0.08)  {\tiny Back};
+    \draw[fill=gray!35] (1.6,0) rectangle (2.4,0.525); \node[above] at (2.0,0.53)  {\tiny .011}; \node[below] at (2.0,-0.08)  {\tiny Scan};
+    \draw[fill=gray!35] (2.8,0) rectangle (3.6,0.745); \node[above] at (3.2,0.75)  {\tiny .015}; \node[below] at (3.2,-0.08)  {\tiny Pass};
+    \draw[fill=gray!35] (4.0,0) rectangle (4.8,0.895); \node[above] at (4.4,0.90)  {\tiny .018}; \node[below] at (4.4,-0.08)  {\tiny DoS};
+    \draw[fill=gray!35] (5.2,0) rectangle (6.0,1.005); \node[above] at (5.6,1.01)  {\tiny .020}; \node[below] at (5.6,-0.08)  {\tiny Rans};
+    \draw[fill=gray!35] (6.4,0) rectangle (7.2,1.305); \node[above] at (6.8,1.31)  {\tiny .026}; \node[below] at (6.8,-0.08)  {\tiny Norm};
+    \draw[fill=gray!35] (7.6,0) rectangle (8.4,1.420); \node[above] at (8.0,1.42)  {\tiny .028}; \node[below] at (8.0,-0.08)  {\tiny Inj};
+    \draw[fill=gray!55] (8.8,0) rectangle (9.6,2.675); \node[above] at (9.2,2.68)  {\tiny .054}; \node[below] at (9.2,-0.08)  {\tiny DDoS};
+    \draw[fill=gray!80] (10.0,0) rectangle (10.8,3.020);\node[above] at (10.4,3.02) {\tiny \bf .060}; \node[below] at (10.4,-0.08) {\tiny \bf XSS};
+    % Avg line
+    \draw[dashed, line width=0.8pt] (0,1.31) -- (11.2,1.31);
+    \node[above right] at (0.2,1.32) {\scriptsize Mean Forgetting $\mathcal{F}_{\text{avg}} = 0.0262$};
+  \end{tikzpicture}
+  \caption{Class-by-class forgetting breakdown $\Delta_c$ across the nine known classes after replay adaptation ($k=100$) on the MITM scenario}
+  \label{fig:phase6_7_per_class_tikz}
+\end{figure}
+
+\textbf{Technical Inferences on Continual Update Paradigms:}
+\begin{enumerate}
+    \item \textbf{Failure of Full Retraining on Rare Threats:} Merging $207$ MITM flows with $127{,}787$ historical flows gives MITM an extreme minority share of just $0.16\%$. In CART tree induction, Gini impurity reduction $\Delta I(s) = I(s) - \frac{|s_L|}{|s|}I(s_L) - \frac{|s_R|}{|s|}I(s_R)$ weights split quality by sample volume. Candidate splits isolating rare MITM records provide negligible impurity gains at upper tree levels, causing trees to subsume MITM into larger classes. As a result, $52.04\%$ of MITM evaluation flows are misclassified, yielding a mediocre F1 of $0.6483$.
+    \item \textbf{Balanced Replay Eliminates Minority Dilution:} Subsampling each historical class to $100$ exemplars equalises the effective prior probabilities ($100$ per known class vs.\ $207$ for MITM). This raises MITM recall from $0.4796$ to $0.9555$ and F1 from $0.6483$ to $0.9773$ ($+0.3290$ gain), while holding mean forgetting to just $\mathcal{F}_{\text{avg}} = 0.0262$.
+\end{enumerate}
+
+\section{Replay Buffer Size Sensitivity and Pareto Frontier Analysis}
+\label{sec:phase7_1_results}
+
+To determine the empirical Pareto frontier between memory footprint and catastrophic forgetting, we systematically swept the per-class quota across $k \in \{25, 50, 100, 200, 500\}$ on the MITM evaluation scenario. Table~\ref{tab:phase7_1_sensitivity} presents the multi-metric trajectory, while Figures~\ref{fig:sensitivity_forgetting_tikz}, \ref{fig:sensitivity_plasticity_tikz}, and~\ref{fig:sensitivity_latency_tikz} plot the forgetting decay, plasticity--stability trade-off, and retraining latency scaling.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Replay buffer sensitivity analysis across varying memory budgets (held-out attack: MITM, $M = 207$)}
+\label{tab:phase7_1_sensitivity}
+\begin{tabular}{|r|r|r|r|r|r|r|r|r|r|r|}
+\hline
+\textbf{$k$/cls} & \textbf{Buffer $|\mathcal{B}|$} & \textbf{Saved (\%)} & \textbf{MITM Prec} & \textbf{MITM Rec} & \textbf{MITM F1} & \textbf{Known Acc} & \textbf{Known F1 (9-cls)} & $\mathcal{F}_{\text{avg}}$ & $\mathcal{F}_{\max}$ & \textbf{Time (s)} \\ \hline
+25   & 225       & 99.82\% & 1.0000 & 0.9615 & 0.9804 & 0.8988 & 0.9256 & 0.0634 & 0.1266 & 0.0512 \\
+50   & 450       & 99.65\% & 1.0000 & 0.9603 & 0.9798 & 0.9317 & 0.9476 & 0.0414 & 0.0731 & 0.0604 \\
+100  & 900       & 99.30\% & 1.0000 & 0.9555 & 0.9773 & 0.9555 & 0.9628 & 0.0262 & 0.0604 & 0.0607 \\
+200  & 1{,}800   & 98.59\% & 1.0000 & 0.9495 & 0.9741 & 0.9650 & 0.9692 & 0.0198 & 0.0449 & 0.0618 \\
+500  & 4{,}500   & 96.48\% & 1.0000 & 0.9255 & 0.9613 & 0.9749 & 0.9779 & 0.0111 & 0.0210 & 0.0731 \\ \hline
+Full & 127{,}787 & 0.00\%  & 1.0000 & 0.4796 & 0.6483 & 0.9900 & 0.9891 & $-0.0002$ & 0.0003 & 0.7355 \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (10.5,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,5.2);
+    \node at (5.0,-0.8) {\footnotesize Per-class replay quota $k$ (flows per known class)};
+    \node[rotate=90] at (-1.2,2.5) {\footnotesize Catastrophic Forgetting ($\Delta$ F1)};
+    % x ticks
+    \draw (1.2,0) -- (1.2,-0.12) node[below] {\scriptsize $k=25$};
+    \draw (3.0,0) -- (3.0,-0.12) node[below] {\scriptsize $k=50$};
+    \draw (4.8,0) -- (4.8,-0.12) node[below] {\scriptsize $k=100$};
+    \draw (6.6,0) -- (6.6,-0.12) node[below] {\scriptsize $k=200$};
+    \draw (8.4,0) -- (8.4,-0.12) node[below] {\scriptsize $k=500$};
+    % y ticks (1 unit = 0.03 forgetting)
+    \draw (0,0)   -- (-0.12,0)   node[left] {\scriptsize 0.00};
+    \draw (0,1.0) -- (-0.12,1.0) node[left] {\scriptsize 0.03};
+    \draw (0,2.0) -- (-0.12,2.0) node[left] {\scriptsize 0.06};
+    \draw (0,3.0) -- (-0.12,3.0) node[left] {\scriptsize 0.09};
+    \draw (0,4.0) -- (-0.12,4.0) node[left] {\scriptsize 0.12};
+    \draw (0,5.0) -- (-0.12,5.0) node[left] {\scriptsize 0.15};
+    % Max forgetting curve
+    \draw[line width=1.2pt] (1.2,4.22) -- (3.0,2.44) -- (4.8,2.01) -- (6.6,1.50) -- (8.4,0.70);
+    \fill (1.2,4.22) circle (2.2pt) node[above right] {\scriptsize 0.1266};
+    \fill (3.0,2.44) circle (2.2pt) node[above right] {\scriptsize 0.0731};
+    \fill (4.8,2.01) circle (2.2pt) node[above right] {\scriptsize 0.0604};
+    \fill (6.6,1.50) circle (2.2pt) node[above right] {\scriptsize 0.0449};
+    \fill (8.4,0.70) circle (2.2pt) node[above right] {\scriptsize 0.0210};
+    \node[right] at (8.7,0.70) {\scriptsize $\mathcal{F}_{\max}$};
+    % Avg forgetting curve
+    \draw[line width=1.2pt, dashed] (1.2,2.11) -- (3.0,1.38) -- (4.8,0.87) -- (6.6,0.66) -- (8.4,0.37);
+    \fill (1.2,2.11) circle (2.2pt) node[below left] {\scriptsize 0.0634};
+    \fill (3.0,1.38) circle (2.2pt) node[below left] {\scriptsize 0.0414};
+    \fill (4.8,0.87) circle (2.2pt) node[below]      {\scriptsize 0.0262};
+    \fill (6.6,0.66) circle (2.2pt) node[below]      {\scriptsize 0.0198};
+    \fill (8.4,0.37) circle (2.2pt) node[below]      {\scriptsize 0.0111};
+    \node[right] at (8.7,0.37) {\scriptsize $\mathcal{F}_{\text{avg}}$};
+    % Knee marker
+    \draw[dotted, line width=0.8pt] (4.8,0) -- (4.8,4.6);
+    \node[above] at (4.8,4.6) {\scriptsize Pareto knee ($k_{\min}=100$)};
+  \end{tikzpicture}
+  \caption{Monotonic decay of Maximum Forgetting ($\mathcal{F}_{\max}$) and Average Forgetting ($\mathcal{F}_{\text{avg}}$) as buffer size $k$ increases from 25 to 500 exemplars per class}
+  \label{fig:sensitivity_forgetting_tikz}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (11.2,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,5.2);
+    \node at (5.4,-0.8) {\footnotesize Replay strategy / per-class quota $k$};
+    \node[rotate=90] at (-1.2,2.5) {\footnotesize F1 Score};
+    % y ticks (0.50 to 1.00 -> y = (F1 - 0.50)*10)
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.50};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.60};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.70};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.80};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.90};
+    \draw (0,5) -- (-0.12,5) node[left] {\scriptsize 1.00};
+    % x ticks
+    \draw (1.0,0) -- (1.0,-0.12) node[below] {\scriptsize $k=25$};
+    \draw (2.7,0) -- (2.7,-0.12) node[below] {\scriptsize $k=50$};
+    \draw (4.4,0) -- (4.4,-0.12) node[below] {\scriptsize $k=100$};
+    \draw (6.1,0) -- (6.1,-0.12) node[below] {\scriptsize $k=200$};
+    \draw (7.8,0) -- (7.8,-0.12) node[below] {\scriptsize $k=500$};
+    \draw (9.5,0) -- (9.5,-0.12) node[below] {\scriptsize Full};
+    % MITM F1 curve
+    \draw[line width=1.2pt] (1.0,4.804) -- (2.7,4.798) -- (4.4,4.773) -- (6.1,4.741) -- (7.8,4.613) -- (9.5,1.483);
+    \fill (1.0,4.804) circle (2pt) node[above] {\scriptsize .980};
+    \fill (2.7,4.798) circle (2pt) node[above] {\scriptsize .980};
+    \fill (4.4,4.773) circle (2pt) node[above] {\scriptsize .977};
+    \fill (6.1,4.741) circle (2pt) node[above] {\scriptsize .974};
+    \fill (7.8,4.613) circle (2pt) node[above right] {\scriptsize .961};
+    \fill (9.5,1.483) circle (2pt) node[right] {\scriptsize .648 (MITM F1)};
+    % Known 9-class F1 curve
+    \draw[line width=1.2pt, dashed] (1.0,4.256) -- (2.7,4.476) -- (4.4,4.628) -- (6.1,4.692) -- (7.8,4.779) -- (9.5,4.891);
+    \fill (1.0,4.256) circle (2pt) node[below] {\scriptsize .926};
+    \fill (2.7,4.476) circle (2pt) node[below] {\scriptsize .948};
+    \fill (4.4,4.628) circle (2pt) node[below] {\scriptsize .963};
+    \fill (6.1,4.692) circle (2pt) node[below] {\scriptsize .969};
+    \fill (7.8,4.779) circle (2pt) node[below] {\scriptsize .978};
+    \fill (9.5,4.891) circle (2pt) node[above left] {\scriptsize .989 (Known F1)};
+  \end{tikzpicture}
+  \caption{Opposing trajectories of New-Attack Plasticity (solid line, MITM F1) and Historical Stability (dashed line, Known 9-Class F1) across buffer capacities}
+  \label{fig:sensitivity_plasticity_tikz}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (10.8,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,4.5);
+    \node[rotate=90] at (-1.2,2.2) {\footnotesize Retraining Latency (seconds)};
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.0};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.2};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.4};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.6};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.8};
+    % bars (1 unit = 0.20s -> y = 5 * t)
+    \draw[fill=gray!35] (0.6,0) rectangle (1.6,0.256); \node[above] at (1.1,0.26) {\scriptsize 0.051s}; \node[below] at (1.1,-0.1) {\scriptsize $k=25$};
+    \draw[fill=gray!35] (2.2,0) rectangle (3.2,0.302); \node[above] at (2.7,0.31) {\scriptsize 0.060s}; \node[below] at (2.7,-0.1) {\scriptsize $k=50$};
+    \draw[fill=gray!55] (3.8,0) rectangle (4.8,0.303); \node[above] at (4.3,0.31) {\scriptsize 0.061s}; \node[below] at (4.3,-0.1) {\scriptsize $k=100$};
+    \draw[fill=gray!35] (5.4,0) rectangle (6.4,0.309); \node[above] at (5.9,0.31) {\scriptsize 0.062s}; \node[below] at (5.9,-0.1) {\scriptsize $k=200$};
+    \draw[fill=gray!35] (7.0,0) rectangle (8.0,0.366); \node[above] at (7.5,0.37) {\scriptsize 0.073s}; \node[below] at (7.5,-0.1) {\scriptsize $k=500$};
+    \draw[fill=gray!80] (8.6,0) rectangle (9.6,3.678); \node[above] at (9.1,3.68) {\scriptsize \bf 0.736s}; \node[below] at (9.1,-0.1) {\scriptsize \bf Full};
+  \end{tikzpicture}
+  \caption{Wall-clock retraining latency across bounded replay buffer sizes ($k=25$ to $500$) compared with Full Historical Retraining}
+  \label{fig:sensitivity_latency_tikz}
+\end{figure}
+
+\textbf{Technical Inferences on Buffer Sizing and Sensitivity:}
+\begin{enumerate}
+    \item \textbf{High Plasticity at Minimal Memory ($k = 25$):} Retaining just $25$ exemplars per class ($225$ flows total, $99.82\%$ storage reduction) achieves $0.9804$ MITM F1. This confirms that tree ensembles need very few historical anchors to delineate an unobserved threat class.
+    \item \textbf{Identification of the $k_{\min} = 100$ Pareto Knee:} Increasing $k$ from $25$ to $100$ slashes average forgetting $\mathcal{F}_{\text{avg}}$ by $58.7\%$ ($0.0634 \rightarrow 0.0262$) and maximum forgetting $\mathcal{F}_{\max}$ by $52.3\%$ ($0.1266 \rightarrow 0.0604$), requiring only $675$ additional exemplars ($129.6\text{ KB}$) and $9.5\text{ ms}$ of computation. Above $k=200$, minority dilution begins to set in, reducing MITM recall from $0.9615$ to $0.9255$ at $k=500$.
+\end{enumerate}
+
+\section{Cross-Attack Generalization and Multi-Volume Case Studies}
+\label{sec:phase8_9_10_results}
+
+To evaluate whether a static buffer quota ($k = 100$) generalizes across diverse attack volumes and quantify the benefits of volume-aware dynamic replay, we evaluated four attack families spanning an $18\times$ volumetric range:
 \begin{itemize}
-    \item \textbf{SDG 9 (Industry, Innovation, and Infrastructure):} Enhancing the cyber-resilience of critical IoT infrastructure against automated zero-day exploitation.
-    \item \textbf{SDG 11 (Sustainable Cities and Communities):} Safeguarding distributed edge sensor networks underpinning smart municipal grids.
-    \item \textbf{SDG 12 (Responsible Consumption and Production):} By eliminating repetitive full retraining cycles and reducing data storage demands by $>97\%$, the system minimizes electrical energy consumption and carbon emissions associated with enterprise AI compute.
+    \item \textbf{Case Study 1: MITM} ($M = 207$ adaptation flows, $832$ evaluation flows; stealthy low-volume attack).
+    \item \textbf{Case Study 2: Ransomware} ($M = 2{,}853$ adaptation flows, $11{,}413$ evaluation flows; medium-volume attack).
+    \item \textbf{Case Study 3: XSS} ($M = 2{,}903$ adaptation flows, $11{,}616$ evaluation flows; high-volume web injection).
+    \item \textbf{Case Study 4: Backdoor} ($M = 3{,}742$ adaptation flows, $14{,}968$ evaluation flows; high-volume beaconing).
 \end{itemize}
+
+\subsection{Cross-Attack Summary and Volumetric Imbalance Ratio Analysis}
+\label{subsec:cross_attack_summary}
+
+Table~\ref{tab:phase8_multi_attack} reports static buffer performance ($k=100$, $|\mathcal{B}|=900$) and the resulting new-to-buffer volumetric imbalance ratio $\rho = M / 900$. Figure~\ref{fig:phase8_rho_tikz} plots the surge in worst-case forgetting when $\rho$ crosses parity ($\rho = 1.0$).
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Leave-one-attack-out evaluation of Static Replay ($k = 100$/class, $|\mathcal{B}| = 900$) across four attack volume profiles}
+\label{tab:phase8_multi_attack}
+\begin{tabular}{|l|r|r|r|r|r|r|r|r|r|}
+\hline
+\textbf{Withheld Attack} & \textbf{Adapt $M$} & \textbf{Eval Flows} & \textbf{Ratio $\rho$} & \textbf{Saved (\%)} & \textbf{New F1} & \textbf{Known F1 Before} & \textbf{Known F1 After} & $\mathcal{F}_{\text{avg}}$ & $\mathcal{F}_{\max}$ \\ \hline
+MITM (Low Vol)        & 207     & 832     & 0.23 & 99.30\% & 0.9773 & 0.9890 & 0.9628 & 0.0262 & 0.0604 \\
+Ransomware (Med Vol)  & 2{,}853 & 11{,}413 & 3.17 & 99.24\% & 0.9997 & 0.9646 & 0.9056 & 0.0590 & 0.3245 \\
+XSS (High Vol)        & 2{,}903 & 11{,}616 & 3.23 & 99.24\% & 0.9988 & 0.9686 & 0.8979 & 0.0707 & 0.3972 \\
+Backdoor (High Vol)   & 3{,}742 & 14{,}968 & 4.16 & 99.22\% & 0.9999 & 0.9619 & 0.9109 & 0.0510 & 0.2785 \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (10.5,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,5.0);
+    \node at (5.0,-0.8) {\footnotesize Imbalance ratio $\rho = M / |\mathcal{B}_{\text{static}}|$ ($|\mathcal{B}_{\text{static}}| = 900$)};
+    \node[rotate=90] at (-1.2,2.4) {\footnotesize Forgetting under Static Replay ($k=100$)};
+    % x ticks: 1 unit = 0.5 ratio -> x = 2 * rho
+    \draw (0,0) -- (0,-0.12) node[below] {\scriptsize 0.0};
+    \draw (2,0) -- (2,-0.12) node[below] {\scriptsize 1.0};
+    \draw (4,0) -- (4,-0.12) node[below] {\scriptsize 2.0};
+    \draw (6,0) -- (6,-0.12) node[below] {\scriptsize 3.0};
+    \draw (8,0) -- (8,-0.12) node[below] {\scriptsize 4.0};
+    \draw (10,0)-- (10,-0.12)node[below] {\scriptsize 5.0};
+    % y ticks: 1 unit = 0.10 forgetting -> y = 10 * F
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.00};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.10};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.20};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.30};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.40};
+    % threshold line rho = 1
+    \draw[dotted, line width=0.8pt] (2,0) -- (2,4.5);
+    \node[above] at (2,4.5) {\scriptsize Parity boundary ($\rho = 1.0$)};
+    % Points for F_max
+    \fill (0.46,0.604) circle (2.5pt) node[above right] {\scriptsize MITM ($\rho=0.23, \mathcal{F}_{\max}=0.060$)};
+    \fill (6.34,3.245) circle (2.5pt) node[left]        {\scriptsize Ransomware ($\rho=3.17, \mathcal{F}_{\max}=0.325$)};
+    \fill (6.46,3.972) circle (2.5pt) node[above]       {\scriptsize XSS ($\rho=3.23, \mathcal{F}_{\max}=0.397$)};
+    \fill (8.32,2.785) circle (2.5pt) node[above left]  {\scriptsize Backdoor ($\rho=4.16, \mathcal{F}_{\max}=0.279$)};
+    \draw[line width=1.0pt, dashed] (0.46,0.604) -- (6.34,3.245) -- (6.46,3.972) -- (8.32,2.785);
+  \end{tikzpicture}
+  \caption{Surge in worst-case per-class forgetting ($\mathcal{F}_{\max}$) when incoming attack volume $M$ pushes the static buffer imbalance ratio $\rho$ above parity ($\rho > 1$)}
+  \label{fig:phase8_rho_tikz}
+\end{figure}
+
+\subsection{Per-Class Forgetting Case Studies: Static vs.\ Dynamic Replay}
+\label{subsec:per_class_case_studies}
+
+Tables~\ref{tab:case_study_ransomware}, \ref{tab:case_study_xss}, and~\ref{tab:case_study_backdoor} detail per-class F1 scores before adaptation, under Static Replay ($k=100$), and under Dynamic Volume Replay ($k_{\text{dyn}} = \lfloor M/9 \rfloor$) for Ransomware, XSS, and Backdoor scenarios.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Case Study 2 (Held-out Attack: Ransomware, $M = 2{,}853$): Per-class F1 and forgetting $\Delta_c$ under Static Replay ($k=100$) vs.\ Dynamic Replay ($k_{\text{dyn}}=317$)}
+\label{tab:case_study_ransomware}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|r|r|r|}
+\hline
+\textbf{Known Class} & \textbf{F1 Before} & \textbf{Static F1} & \textbf{Static $\Delta_c$} & \textbf{Dynamic F1} & \textbf{Dynamic $\Delta_c$} & \textbf{Forgetting Cut} \\ \hline
+Backdoor   & 0.9996 & 0.9979 & $+0.0018$ & 0.9987 & $+0.0010$ & $-44.4\%$ \\
+Normal     & 0.9971 & 0.9747 & $+0.0223$ & 0.9801 & $+0.0170$ & $-23.8\%$ \\
+Password   & 0.9944 & 0.9804 & $+0.0139$ & 0.9862 & $+0.0082$ & $-41.0\%$ \\
+Scanning   & 0.9888 & 0.9814 & $+0.0075$ & 0.9857 & $+0.0031$ & $-58.7\%$ \\
+DDoS       & 0.9861 & 0.9377 & $+0.0484$ & 0.9587 & $+0.0274$ & $-43.4\%$ \\
+DoS        & 0.9819 & 0.9652 & $+0.0167$ & 0.9692 & $+0.0127$ & $-24.0\%$ \\
+Injection  & 0.9752 & 0.9394 & $+0.0358$ & 0.9609 & $+0.0144$ & $-59.8\%$ \\
+XSS        & 0.9734 & 0.9129 & $+0.0605$ & 0.9349 & $+0.0385$ & $-36.4\%$ \\
+\textbf{MITM (Known)} & \textbf{0.7852} & \textbf{0.4607} & $\boldsymbol{+0.3245}$ & \textbf{0.5297} & $\boldsymbol{+0.2555}$ & $\boldsymbol{-21.3\%}$ ($\mathcal{F}_{\max}$) \\ \hline
+\textbf{9-Class Mean} & \textbf{0.9646} & \textbf{0.9056} & $\boldsymbol{+0.0590}$ & \textbf{0.9227} & $\boldsymbol{+0.0420}$ & $\boldsymbol{-28.9\%}$ ($\mathcal{F}_{\text{avg}}$) \\ \hline
+\textbf{Ransomware (New)} & \textbf{0.0000} & \textbf{0.9997} & -- & \textbf{0.9997} & -- & \textbf{Plasticity kept} \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Case Study 3 (Held-out Attack: XSS, $M = 2{,}903$): Per-class F1 and forgetting $\Delta_c$ under Static Replay ($k=100$) vs.\ Dynamic Replay ($k_{\text{dyn}}=322$)}
+\label{tab:case_study_xss}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|r|r|r|}
+\hline
+\textbf{Known Class} & \textbf{F1 Before} & \textbf{Static F1} & \textbf{Static $\Delta_c$} & \textbf{Dynamic F1} & \textbf{Dynamic $\Delta_c$} & \textbf{Forgetting Cut} \\ \hline
+Backdoor   & 0.9996 & 0.9908 & $+0.0088$ & 0.9981 & $+0.0014$ & $-84.1\%$ \\
+Ransomware & 0.9993 & 0.9853 & $+0.0140$ & 0.9863 & $+0.0130$ & $-7.1\%$ \\
+Normal     & 0.9975 & 0.9582 & $+0.0392$ & 0.9794 & $+0.0180$ & $-54.1\%$ \\
+Password   & 0.9940 & 0.9708 & $+0.0232$ & 0.9856 & $+0.0085$ & $-63.4\%$ \\
+Scanning   & 0.9900 & 0.9607 & $+0.0293$ & 0.9844 & $+0.0056$ & $-80.9\%$ \\
+DDoS       & 0.9890 & 0.9382 & $+0.0508$ & 0.9544 & $+0.0347$ & $-31.7\%$ \\
+Injection  & 0.9869 & 0.9377 & $+0.0492$ & 0.9507 & $+0.0362$ & $-26.4\%$ \\
+DoS        & 0.9835 & 0.9588 & $+0.0247$ & 0.9753 & $+0.0082$ & $-66.8\%$ \\
+\textbf{MITM (Known)} & \textbf{0.7778} & \textbf{0.3806} & $\boldsymbol{+0.3972}$ & \textbf{0.5230} & $\boldsymbol{+0.2548}$ & $\boldsymbol{-35.9\%}$ ($\mathcal{F}_{\max}$) \\ \hline
+\textbf{9-Class Mean} & \textbf{0.9686} & \textbf{0.8979} & $\boldsymbol{+0.0707}$ & \textbf{0.9263} & $\boldsymbol{+0.0423}$ & $\boldsymbol{-40.2\%}$ ($\mathcal{F}_{\text{avg}}$) \\ \hline
+\textbf{XSS (New)} & \textbf{0.0000} & \textbf{0.9988} & -- & \textbf{0.9978} & -- & \textbf{Plasticity kept} \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Case Study 4 (Held-out Attack: Backdoor, $M = 3{,}742$): Per-class F1 and forgetting $\Delta_c$ under Static Replay ($k=100$) vs.\ Dynamic Replay ($k_{\text{dyn}}=415$)}
+\label{tab:case_study_backdoor}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|r|r|r|}
+\hline
+\textbf{Known Class} & \textbf{F1 Before} & \textbf{Static F1} & \textbf{Static $\Delta_c$} & \textbf{Dynamic F1} & \textbf{Dynamic $\Delta_c$} & \textbf{Forgetting Cut} \\ \hline
+Ransomware & 0.9995 & 0.9872 & $+0.0123$ & 0.9915 & $+0.0080$ & $-35.0\%$ \\
+Normal     & 0.9967 & 0.9747 & $+0.0221$ & 0.9827 & $+0.0140$ & $-36.7\%$ \\
+Password   & 0.9928 & 0.9815 & $+0.0113$ & 0.9874 & $+0.0055$ & $-51.3\%$ \\
+Scanning   & 0.9899 & 0.9823 & $+0.0076$ & 0.9835 & $+0.0065$ & $-14.5\%$ \\
+DoS        & 0.9844 & 0.9735 & $+0.0110$ & 0.9737 & $+0.0108$ & $-1.8\%$ \\
+DDoS       & 0.9843 & 0.9489 & $+0.0354$ & 0.9583 & $+0.0260$ & $-26.6\%$ \\
+Injection  & 0.9750 & 0.9489 & $+0.0261$ & 0.9584 & $+0.0166$ & $-36.4\%$ \\
+XSS        & 0.9722 & 0.9177 & $+0.0545$ & 0.9355 & $+0.0367$ & $-32.7\%$ \\
+\textbf{MITM (Known)} & \textbf{0.7620} & \textbf{0.4835} & $\boldsymbol{+0.2785}$ & \textbf{0.5393} & $\boldsymbol{+0.2228}$ & $\boldsymbol{-20.0\%}$ ($\mathcal{F}_{\max}$) \\ \hline
+\textbf{9-Class Mean} & \textbf{0.9619} & \textbf{0.9109} & $\boldsymbol{+0.0510}$ & \textbf{0.9234} & $\boldsymbol{+0.0385}$ & $\boldsymbol{-24.4\%}$ ($\mathcal{F}_{\text{avg}}$) \\ \hline
+\textbf{Backdoor (New)} & \textbf{0.0000} & \textbf{0.9999} & -- & \textbf{0.9999} & -- & \textbf{Plasticity kept} \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\textbf{Key Analytical Insights from Tables~\ref{tab:case_study_ransomware}--\ref{tab:case_study_backdoor}:}
+\begin{enumerate}
+    \item \textbf{Identity of the Most Vulnerable Known Class:} In all three volumetric updates, \textbf{MITM is one of the nine known historical classes}, and in all three runs it suffers the maximum forgetting $\mathcal{F}_{\max}$ ($0.3245$ on Ransomware, $0.3972$ on XSS, and $0.2785$ on Backdoor). Because MITM has the smallest natural support and shares feature overlap with application and DoS traffic, a static $100$-flow quota leaves MITM severely outvoted at decision-tree split points when pitted against $2{,}853\text{--}3{,}742$ incoming flows.
+    \item \textbf{Global Protection Across All Known Classes:} By dynamically scaling the per-class quota ($k_{\text{dyn}} = 317, 322, 415$), Dynamic Replay simultaneously curbs forgetting on \emph{every single known class}. On the XSS scenario (Table~\ref{tab:case_study_xss}), Dynamic Replay reduces Normal traffic forgetting by $54.1\%$ ($0.0392 \rightarrow 0.0180$), DoS forgetting by $66.8\%$ ($0.0247 \rightarrow 0.0082$), Scanning forgetting by $80.9\%$ ($0.0293 \rightarrow 0.0056$), and MITM maximum forgetting by $35.9\%$ ($0.3972 \rightarrow 0.2548$).
+\end{enumerate}
+
+\subsection{Consolidated Multi-Strategy Evaluation Across All Attack Scenarios}
+\label{subsec:consolidated_phase9_10}
+
+Table~\ref{tab:phase9_master_comparison} summarizes the three-way comparison between Full Retraining, Static Replay ($k=100$), and Dynamic Volume Replay across all four attacks. Table~\ref{tab:phase10_complete_20rows} provides the comprehensive 20-configuration master benchmark incorporating the exploratory Margin-Uncertainty sampler (\texttt{dynamic\_smart}), Backward Transfer (BWT), Plasticity--Stability Index (PSI), and Edge IoT Viability Index (EIVI). Figures~\ref{fig:phase9_max_forgetting_tikz}, \ref{fig:phase9_avg_forgetting_tikz}, and~\ref{fig:phase10_eivi_tikz} illustrate the comparative performance.
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Performance comparison of Full Retraining, Static Replay ($k=100$), and Proposed Dynamic Replay across all four unseen attacks}
+\label{tab:phase9_master_comparison}
+\begin{tabular}{|l|l|r|r|r|r|r|r|r|r|}
+\hline
+\textbf{Unseen Attack} & \textbf{Strategy} & \textbf{$k$/cls} & \textbf{Buffer $|\mathcal{B}|$} & \textbf{Saved (\%)} & \textbf{New F1} & \textbf{Known F1} & $\mathcal{F}_{\text{avg}}$ & $\mathcal{F}_{\max}$ & \textbf{Time (s)} \\ \hline
+\textbf{MITM}       & Full Replay    & Full & 127{,}787 & 0.00\%  & 0.6483 & 0.9891 & $-0.0002$ & 0.0003 & 0.7049 \\
+($M = 207$)         & Static Replay  & 100  & 900       & 99.30\% & 0.9773 & 0.9628 & 0.0262    & 0.0604 & 0.0618 \\
+                    & \textbf{Dynamic Replay} & \textbf{100} & \textbf{900} & \textbf{99.30\%} & \textbf{0.9773} & \textbf{0.9628} & \textbf{0.0262} & \textbf{0.0604} & \textbf{0.0609} \\ \hline
+\textbf{Ransomware} & Full Replay    & Full & 118{,}528 & 0.00\%  & 0.9996 & 0.9631 & 0.0015    & 0.0132 & 0.6838 \\
+($M = 2{,}853$)     & Static Replay  & 100  & 900       & 99.24\% & 0.9997 & 0.9056 & 0.0590    & 0.3245 & 0.0581 \\
+                    & \textbf{Dynamic Replay} & \textbf{317} & \textbf{2{,}853} & \textbf{97.59\%} & \textbf{0.9997} & \textbf{0.9227} & \textbf{0.0420} & \textbf{0.2555} & \textbf{0.0749} \\ \hline
+\textbf{XSS}        & Full Replay    & Full & 118{,}351 & 0.00\%  & 0.9608 & 0.9662 & 0.0024    & 0.0152 & 0.6524 \\
+($M = 2{,}903$)     & Static Replay  & 100  & 900       & 99.24\% & 0.9988 & 0.8979 & 0.0707    & 0.3972 & 0.0727 \\
+                    & \textbf{Dynamic Replay} & \textbf{322} & \textbf{2{,}898} & \textbf{97.55\%} & \textbf{0.9978} & \textbf{0.9263} & \textbf{0.0423} & \textbf{0.2548} & \textbf{0.0727} \\ \hline
+\textbf{Backdoor}   & Full Replay    & Full & 115{,}417 & 0.00\%  & 0.9997 & 0.9622 & $-0.0003$ & 0.0001 & 0.6588 \\
+($M = 3{,}742$)     & Static Replay  & 100  & 900       & 99.22\% & 0.9999 & 0.9109 & 0.0510    & 0.2785 & 0.0711 \\
+                    & \textbf{Dynamic Replay} & \textbf{415} & \textbf{3{,}735} & \textbf{96.76\%} & \textbf{0.9999} & \textbf{0.9234} & \textbf{0.0385} & \textbf{0.2228} & \textbf{0.0828} \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.2}
+\caption{Comprehensive 20-configuration evaluation across all four unseen attacks and five adaptation strategies}
+\label{tab:phase10_complete_20rows}
+\begin{tabular}{|l|l|r|r|r|r|r|r|r|r|r|}
+\hline
+\textbf{Attack} & \textbf{Strategy} & \textbf{$k$/cls} & \textbf{Buffer} & \textbf{MRR\%} & \textbf{New F1} & \textbf{Known Acc} & $\mathcal{F}_{\text{avg}}$ & $\mathcal{F}_{\max}$ & \textbf{PSI} & \textbf{EIVI} \\ \hline
+MITM & Static Baseline      & 0    & 127{,}787 & 0.00  & 0.0000 & 0.9902 & 0.0000  & 0.0000 & 0.0000 & 35.50 \\
+MITM & Full Retraining      & Full & 127{,}787 & 0.00  & 0.6483 & 0.9900 & $-0.0002$ & 0.0003 & 0.7866 & 58.19 \\
+MITM & Static ($k=100$)     & 100  & 900       & 99.30 & 0.9773 & 0.9555 & 0.0262  & 0.0604 & 0.9755 & 93.61 \\
+MITM & \textbf{Dynamic Vol} & \textbf{100} & \textbf{900} & \textbf{99.30} & \textbf{0.9773} & \textbf{0.9555} & \textbf{0.0262} & \textbf{0.0604} & \textbf{0.9755} & \textbf{93.61} \\
+MITM & Smart Dynamic        & 100  & 900       & 99.30 & 0.9374 & 0.9230 & 0.0588  & 0.1441 & 0.9393 & 91.07 \\ \hline
+Rans & Static Baseline      & 0    & 118{,}528 & 0.00  & 0.0000 & 0.9875 & 0.0000  & 0.0000 & 0.0000 & 35.50 \\
+Rans & Full Retraining      & Full & 118{,}528 & 0.00  & 0.9996 & 0.9874 & 0.0015  & 0.0132 & 0.9990 & 70.43 \\
+Rans & Static ($k=100$)     & 100  & 900       & 99.24 & 0.9997 & 0.9566 & 0.0590  & 0.3245 & 0.9694 & 93.23 \\
+Rans & \textbf{Dynamic Vol} & \textbf{317} & \textbf{2{,}853} & \textbf{97.59} & \textbf{0.9997} & \textbf{0.9678} & \textbf{0.0420} & \textbf{0.2555} & \textbf{0.9784} & \textbf{93.42} \\
+Rans & Smart Dynamic        & 348  & 3{,}132   & 97.36 & 1.0000 & 0.9521 & 0.0527  & 0.1745 & 0.9729 & 92.99 \\ \hline
+XSS  & Static Baseline      & 0    & 118{,}351 & 0.00  & 0.0000 & 0.9917 & 0.0000  & 0.0000 & 0.0000 & 35.50 \\
+XSS  & Full Retraining      & Full & 118{,}351 & 0.00  & 0.9608 & 0.9904 & 0.0024  & 0.0152 & 0.9788 & 69.04 \\
+XSS  & Static ($k=100$)     & 100  & 900       & 99.24 & 0.9988 & 0.9426 & 0.0707  & 0.3972 & 0.9628 & 92.79 \\
+XSS  & \textbf{Dynamic Vol} & \textbf{322} & \textbf{2{,}898} & \textbf{97.55} & \textbf{0.9978} & \textbf{0.9648} & \textbf{0.0423} & \textbf{0.2548} & \textbf{0.9774} & \textbf{93.33} \\
+XSS  & Smart Dynamic        & 354  & 3{,}186   & 97.31 & 0.9939 & 0.9567 & 0.0493  & 0.2310 & 0.9718 & 92.89 \\ \hline
+Back & Static Baseline      & 0    & 115{,}417 & 0.00  & 0.0000 & 0.9867 & 0.0000  & 0.0000 & 0.0000 & 35.50 \\
+Back & Full Retraining      & Full & 115{,}417 & 0.00  & 0.9997 & 0.9868 & $-0.0003$ & 0.0001 & 0.9999 & 70.49 \\
+Back & Static ($k=100$)     & 100  & 900       & 99.22 & 0.9999 & 0.9660 & 0.0510  & 0.2785 & 0.9738 & 93.52 \\
+Back & \textbf{Dynamic Vol} & \textbf{415} & \textbf{3{,}735} & \textbf{96.76} & \textbf{0.9999} & \textbf{0.9708} & \textbf{0.0385} & \textbf{0.2228} & \textbf{0.9803} & \textbf{93.34} \\
+Back & Smart Dynamic        & 444  & 3{,}996   & 96.54 & 0.9997 & 0.9571 & 0.0466  & 0.1386 & 0.9760 & 92.99 \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (11.6,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,4.8);
+    \node[rotate=90] at (-1.2,2.3) {\footnotesize Maximum Forgetting ($\mathcal{F}_{\max}$)};
+    % y ticks (1 unit = 0.10)
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.00};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.10};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.20};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.30};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.40};
+    % Group 1: MITM
+    \draw[fill=gray!20] (0.5,0) rectangle (1.1,0.604); \node[above] at (0.8,0.61) {\tiny .060};
+    \draw[fill=gray!55] (1.15,0) rectangle (1.75,0.604); \node[above] at (1.45,0.61) {\tiny .060};
+    \draw[fill=gray!85] (1.8,0) rectangle (2.4,1.441); \node[above] at (2.1,1.44) {\tiny .144};
+    \node[below] at (1.45,-0.1) {\footnotesize MITM};
+    % Group 2: Ransomware
+    \draw[fill=gray!20] (3.2,0) rectangle (3.8,3.245); \node[above] at (3.5,3.25) {\tiny .325};
+    \draw[fill=gray!55] (3.85,0) rectangle (4.45,2.555); \node[above] at (4.15,2.56) {\tiny .256};
+    \draw[fill=gray!85] (4.5,0) rectangle (5.1,1.745); \node[above] at (4.8,1.75) {\tiny .175};
+    \node[below] at (4.15,-0.1) {\footnotesize Ransomware};
+    % Group 3: XSS
+    \draw[fill=gray!20] (5.9,0) rectangle (6.5,3.972); \node[above] at (6.2,3.97) {\tiny .397};
+    \draw[fill=gray!55] (6.55,0) rectangle (7.15,2.548); \node[above] at (6.85,2.55) {\tiny .255};
+    \draw[fill=gray!85] (7.2,0) rectangle (7.8,2.310); \node[above] at (7.5,2.31) {\tiny .231};
+    \node[below] at (6.85,-0.1) {\footnotesize XSS};
+    % Group 4: Backdoor
+    \draw[fill=gray!20] (8.6,0) rectangle (9.2,2.785); \node[above] at (8.9,2.79) {\tiny .279};
+    \draw[fill=gray!55] (9.25,0) rectangle (9.85,2.228); \node[above] at (9.55,2.23) {\tiny .223};
+    \draw[fill=gray!85] (9.9,0) rectangle (10.5,1.386); \node[above] at (10.2,1.39) {\tiny .139};
+    \node[below] at (9.55,-0.1) {\footnotesize Backdoor};
+    % Legend
+    \draw[fill=gray!20] (0.4,4.3) rectangle (0.8,4.55); \node[right] at (0.9,4.42) {\scriptsize Static ($k=100$)};
+    \draw[fill=gray!55] (3.8,4.3) rectangle (4.2,4.55); \node[right] at (4.3,4.42) {\scriptsize Dynamic Volume};
+    \draw[fill=gray!85] (7.5,4.3) rectangle (7.9,4.55); \node[right] at (8.0,4.42) {\scriptsize Smart Dynamic (Margin)};
+  \end{tikzpicture}
+  \caption{Comparison of worst-case per-class forgetting ($\mathcal{F}_{\max}$) across Static Replay, Dynamic Volume Replay, and Smart Boundary-Uncertainty Dynamic Replay}
+  \label{fig:phase9_max_forgetting_tikz}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (11.6,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,4.5);
+    \node[rotate=90] at (-1.2,2.2) {\footnotesize Average Forgetting ($\mathcal{F}_{\text{avg}}$)};
+    % y ticks (1 unit = 0.02 -> y = 50 * F_avg)
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.00};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.02};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.04};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.06};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.08};
+    % Group 1: MITM
+    \draw[fill=gray!25] (0.6,0) rectangle (1.3,1.31); \node[above] at (0.95,1.31) {\tiny .026};
+    \draw[fill=gray!70] (1.35,0) rectangle (2.05,1.31); \node[above] at (1.70,1.31) {\tiny .026};
+    \node[below] at (1.32,-0.1) {\footnotesize MITM};
+    % Group 2: Ransomware
+    \draw[fill=gray!25] (3.3,0) rectangle (4.0,2.95); \node[above] at (3.65,2.95) {\tiny .059};
+    \draw[fill=gray!70] (4.05,0) rectangle (4.75,2.10); \node[above] at (4.40,2.10) {\tiny .042};
+    \node[below] at (4.02,-0.1) {\footnotesize Ransomware};
+    % Group 3: XSS
+    \draw[fill=gray!25] (6.0,0) rectangle (6.7,3.535); \node[above] at (6.35,3.54) {\tiny .071};
+    \draw[fill=gray!70] (6.75,0) rectangle (7.45,2.115); \node[above] at (7.10,2.12) {\tiny .042};
+    \node[below] at (6.72,-0.1) {\footnotesize XSS};
+    % Group 4: Backdoor
+    \draw[fill=gray!25] (8.7,0) rectangle (9.4,2.55); \node[above] at (9.05,2.55) {\tiny .051};
+    \draw[fill=gray!70] (9.45,0) rectangle (10.15,1.925); \node[above] at (9.80,1.93) {\tiny .039};
+    \node[below] at (9.42,-0.1) {\footnotesize Backdoor};
+    % Legend
+    \draw[fill=gray!25] (0.8,4.0) rectangle (1.3,4.3); \node[right] at (1.4,4.15) {\scriptsize Static Replay ($k=100$/cls)};
+    \draw[fill=gray!70] (5.2,4.0) rectangle (5.7,4.3); \node[right] at (5.8,4.15) {\scriptsize Proposed Dynamic Volume Replay};
+  \end{tikzpicture}
+  \caption{Reduction in Average Catastrophic Forgetting ($\mathcal{F}_{\text{avg}}$) achieved by Dynamic Volume Replay across the four attack profiles}
+  \label{fig:phase9_avg_forgetting_tikz}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    % axes
+    \draw[-latex', line width=0.75pt] (0,0) -- (11.6,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,5.2);
+    \node[rotate=90] at (-1.2,2.5) {\footnotesize Edge IoT Viability Index (EIVI, 0--100)};
+    % y ticks (1 unit = 20 EIVI points)
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 20};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 40};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 60};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 80};
+    \draw (0,5) -- (-0.12,5) node[left] {\scriptsize 100};
+    % Group 1: MITM
+    \draw[fill=gray!15] (0.5,0) rectangle (1.1,2.91); \node[above] at (0.8,2.91) {\tiny 58.2};
+    \draw[fill=gray!45] (1.15,0) rectangle (1.75,4.68); \node[above] at (1.45,4.68) {\tiny 93.6};
+    \draw[fill=gray!80] (1.8,0) rectangle (2.4,4.68); \node[above] at (2.1,4.68) {\tiny 93.6};
+    \node[below] at (1.45,-0.1) {\footnotesize MITM};
+    % Group 2: Ransomware
+    \draw[fill=gray!15] (3.2,0) rectangle (3.8,3.52); \node[above] at (3.5,3.52) {\tiny 70.4};
+    \draw[fill=gray!45] (3.85,0) rectangle (4.45,4.66); \node[above] at (4.15,4.66) {\tiny 93.2};
+    \draw[fill=gray!80] (4.5,0) rectangle (5.1,4.67); \node[above] at (4.8,4.67) {\tiny 93.4};
+    \node[below] at (4.15,-0.1) {\footnotesize Ransomware};
+    % Group 3: XSS
+    \draw[fill=gray!15] (5.9,0) rectangle (6.5,3.45); \node[above] at (6.2,3.45) {\tiny 69.0};
+    \draw[fill=gray!45] (6.55,0) rectangle (7.15,4.64); \node[above] at (6.85,4.64) {\tiny 92.8};
+    \draw[fill=gray!80] (7.2,0) rectangle (7.8,4.67); \node[above] at (7.5,4.67) {\tiny 93.3};
+    \node[below] at (6.85,-0.1) {\footnotesize XSS};
+    % Group 4: Backdoor
+    \draw[fill=gray!15] (8.6,0) rectangle (9.2,3.52); \node[above] at (8.9,3.52) {\tiny 70.5};
+    \draw[fill=gray!45] (9.25,0) rectangle (9.85,4.68); \node[above] at (9.55,4.68) {\tiny 93.5};
+    \draw[fill=gray!80] (9.9,0) rectangle (10.5,4.67); \node[above] at (10.2,4.67) {\tiny 93.3};
+    \node[below] at (9.55,-0.1) {\footnotesize Backdoor};
+    % Legend
+    \draw[fill=gray!15] (0.5,4.85) rectangle (0.9,5.1); \node[right] at (1.0,4.98) {\scriptsize Full Retraining};
+    \draw[fill=gray!45] (4.0,4.85) rectangle (4.4,5.1); \node[right] at (4.5,4.98) {\scriptsize Static ($k=100$)};
+    \draw[fill=gray!80] (7.2,4.85) rectangle (7.6,5.1); \node[right] at (7.7,4.98) {\scriptsize Dynamic Volume Replay};
+  \end{tikzpicture}
+  \caption{Composite Edge IoT Viability Index (EIVI) across all four unseen attack scenarios}
+  \label{fig:phase10_eivi_tikz}
+\end{figure}
+
+\section{Hardware Resource Footprint and Edge Viability Synthesis}
+\label{sec:resource_synthesis}
+
+To evaluate embedded viability on an IoT edge gateway, Table~\ref{tab:memory_bytes} translates flow counts into concrete memory footprints for $48$ encoded features represented as 32-bit floating-point numbers ($4\text{ bytes} \times 48 = 192\text{ bytes per flow}$), alongside measured wall-clock speedups over full retraining.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Physical memory footprint and retraining speedup across update strategies}
+\label{tab:memory_bytes}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|l|r|r|r|r|r|}
+\hline
+\textbf{Strategy / Scenario} & \textbf{Flows} & \textbf{Physical Storage} & \textbf{Memory Saved} & \textbf{Update Time} & \textbf{Speedup} \\ \hline
+Full Archive (MITM run)         & 127{,}787 & 24.54 MB (24{,}535 KB) & 0.00\%  & 0.7049 s & $1.0\times$ \\
+Static Replay ($k=25$/cls)      & 225       & 43.2 KB (0.04 MB)      & 99.82\% & 0.0512 s & $13.8\times$ \\
+Static Replay ($k=50$/cls)      & 450       & 86.4 KB (0.08 MB)      & 99.65\% & 0.0604 s & $11.7\times$ \\
+Dynamic Replay (MITM, $k=100$)  & 900       & 172.8 KB (0.17 MB)     & 99.30\% & 0.0609 s & $11.6\times$ \\
+Dynamic Replay (Rans, $k=317$)  & 2{,}853   & 547.8 KB (0.53 MB)     & 97.59\% & 0.0749 s & $9.1\times$ \\
+Dynamic Replay (XSS, $k=322$)   & 2{,}898   & 556.4 KB (0.54 MB)     & 97.55\% & 0.0727 s & $9.0\times$ \\
+Dynamic Replay (Back, $k=415$)  & 3{,}735   & 717.1 KB (0.70 MB)     & 96.76\% & 0.0828 s & $8.0\times$ \\
+Hard Ceiling Cap ($B_{\max}$)   & 5{,}000   & 960.0 KB (0.94 MB)     & 96.09\% & $<0.10$ s & $>7.0\times$ \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+Even under the maximum buffer allocation of $B_{\max} = 5{,}000$ flows, the entire replay buffer occupies less than $1\text{ MB}$ of storage ($960\text{ KB}$), compared with $\sim 24.5\text{ MB}$ for the historical training archive. Table~\ref{tab:requirements_verification} concludes the evaluation by systematically mapping the empirical results to the seven design requirements (R1--R7) defined in Chapter~\ref{chap:proposed_work}.
+
+\begin{table}[htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\caption{Verification of design requirements R1--R7 against experimental findings}
+\label{tab:requirements_verification}
+\begin{tabular}{|l|p{3.8cm}|p{7.6cm}|}
+\hline
+\textbf{Req.} & \textbf{Target Specification} & \textbf{Empirical Verification \& Inference} \\ \hline
+\textbf{R1} & Accurate classification of known IoT traffic & Baseline Random Forest achieves $99.02\%$ accuracy and $0.9890$ Macro-F1 across the $K = 9$ known classes (Table~\ref{tab:full_confusion_matrix}). \\ \hline
+\textbf{R2} & Unsupervised flagging of unfamiliar attacks & Parallel Isolation Forest flags $18.86\%$ of unseen MITM flows (vs.\ $0.00\%$ recall for the supervised RF) at nearly seven times its $2.70\%$ rate on known attacks, triggering Stage~2 adaptation (Table~\ref{tab:phase5_iso_breakdown}). \\ \hline
+\textbf{R3} & High plasticity on newly confirmed attacks & Dynamic Replay achieves $F1_{\text{new}} = 0.9773$ on rare MITM ($+0.3290$ higher than Full Retraining) and $0.9978\text{--}0.9999$ on volumetric attacks (Table~\ref{tab:phase9_master_comparison}). \\ \hline
+\textbf{R4} & Bounded forgetting on previously learned classes & Dynamic Replay keeps $\mathcal{F}_{\text{avg}} \le 0.0423$ across all attacks and cuts volumetric $\mathcal{F}_{\max}$ spikes by $20.0\text{--}35.9\%$ relative to static buffers (Tables~\ref{tab:case_study_ransomware}--\ref{tab:case_study_backdoor}). \\ \hline
+\textbf{R5} & Strict memory ceiling on edge storage & Replay storage is reduced by $96.76\text{--}99.30\%$ ($172.8\text{--}717.1\text{ KB}$ vs.\ $24.5\text{ MB}$ full archive), staying well inside the $5{,}000$-flow ($<1\text{ MB}$) cap (Table~\ref{tab:memory_bytes}). \\ \hline
+\textbf{R6} & Sub-second on-device retraining latency & All Dynamic Replay updates finish in $0.0609\text{--}0.0828\text{ s}$ ($8\times$ to $12\times$ faster than Full Retraining), enabling online gateway updates without packet drops. \\ \hline
+\textbf{R7} & Robustness across rare and volumetric attacks & Tested across an $18\times$ range of incoming batch sizes ($M = 207$ to $M = 3{,}742$), Dynamic Replay maintains $\text{PSI} \ge 0.9755$ and $\text{EIVI} \ge 93.33$ in every scenario (Table~\ref{tab:phase10_complete_20rows}). \\ \hline
+\end{tabular}
+\end{table}
+
+In summary, the empirical results confirm that static intrusion detectors experience catastrophic failure on unobserved threats, that lightweight unsupervised screening provides an effective trigger for continuous adaptation, that class-balanced replay resolves minority dilution on rare attacks, and that volume-aware Dynamic Replay suppresses severe forgetting spikes under volumetric surges while preserving $>96.7\%$ memory savings and sub-$0.1\text{ s}$ retraining latency. Chapter~\ref{chap:conclusion} synthesizes the broader conclusions of this research and outlines directions for future inquiry.

@@ -1,61 +1,200 @@
-\chapter{Literature Review and Related Work}
+\chapter{Literature Survey}
 \label{chap:literature_review}
+\label{chap:lit_survey}
 
-\section{Machine Learning in Network Intrusion Detection}
-Network Intrusion Detection Systems (NIDS) constitute an indispensable component of defensive cyber operations. Over the past decade, the rapid proliferation of high-throughput network architectures and the sophistication of encrypted adversarial tactics have rendered conventional signature-matching systems (e.g., Snort, Suricata) insufficient against polymorphous exploits. Consequently, extensive research has focused on applying Machine Learning (ML) and Deep Learning (DL) to statistical packet flow analytics.
+\section{Research Papers}
+\label{sec:research_papers}
 
-Traditional supervised algorithms—including Support Vector Machines (SVM), k-Nearest Neighbors (k-NN), Decision Trees, and Naive Bayes—were initially leveraged on historical intrusion datasets such as KDD-CUP99 and NSL-KDD. However, these classical datasets have been widely criticized in literature for unrealistic traffic distributions, outdated attack primitives, and severe artificial class redundancies. 
+For this research purpose we have referred to the following papers that provide us base and foundational knowledge in our research. They are:
 
-With the emergence of contemporary benchmarks such as UNSW-NB15, CIC-IDS2017, and particularly the **TON\_IoT** dataset, researchers transitioned toward advanced tree-ensemble methodologies, notably Random Forests (RF), XGBoost, and LightGBM. Ensemble tree methods consistently exhibit state-of-the-art performance on tabular network metadata (e.g., packet header statistics, inter-arrival times, byte rates, and TCP flag counts). Their superior performance is driven by their capacity to capture non-linear feature interactions, natural resistance to numerical feature scaling disparities, and resilience against multi-collinearity. In static benchmarks, Random Forest architectures routinely attain over 97\% classification accuracy with low false-alarm ratios.
+\subsection{Random Forests: Ensemble Learning on High-Dimensional Tabular Telemetry}
 
-Despite these achievements, a critical deficiency persists across the vast majority of supervised NIDS literature: models are evaluated strictly under static, stationary test splits. In real-world deployment environments, network distributions are non-stationary, and supervised classifiers operate under a closed-world assumption that blinds them to out-of-distribution attacks.
+\noindent\textbf{Objective and methodology:} Breiman~\cite{breiman2001random} introduced the Random Forest algorithm as an ensemble of unpruned decision trees built using bootstrap aggregation (bagging) and randomized feature subspace selection at every candidate split. The objective was to construct non-linear multi-class decision surfaces that significantly lower generalization variance without inducing excess bias. In network security engineering, this approach is applied by training an ensemble of axis-aligned trees over aggregated bidirectional flow measurements, evaluating split purity via the Gini impurity index.
 
-\section{Zero-Day Threat Discovery and Anomaly Detection}
-To overcome the closed-world limitation of supervised learning, researchers have extensively explored unsupervised and semi-supervised anomaly detection. These frameworks train exclusively on benign baseline traffic, aiming to model the normal operational manifold of the network:
+\smallskip
+\noindent\textbf{Results and findings:} The paper proved that random forests do not overfit as more trees are added, converging asymptotically to a limiting value of generalization error. On complex tabular telemetry, the ensemble achieves high multi-class precision and recall while maintaining computational efficiency during inference. Decision paths consist of simple threshold checks on scalar feature values, making inference fast on general-purpose processors without requiring floating-point matrix coprocessors.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} The primary structural constraint of the algorithm is its strict adherence to a closed-world taxonomy. A decision tree ensemble maps incoming feature vectors exclusively into the leaf labels established during initial offline training. When presented with network traffic from an emergent zero-day attack family that was absent from the training split, the model has no mechanism to reject the sample or declare its uncertainty. It deterministically routes the unfamiliar flow to the nearest known historical class.
+
+\smallskip
+\noindent\textbf{Application in our research:} Random Forest serves as our primary inline supervised classifier (Module M2). It provides the high line-rate classification accuracy required for known IoT network traffic, while establishing the baseline model whose catastrophic forgetting and misclassification patterns we examine when previously unseen attack flows arrive at the gateway.
+
+\subsection{UNSW-NB15: Contemporary Multi-Class Network Intrusion Telemetry}
+
+\noindent\textbf{Objective and methodology:} Moustafa and Slay~\cite{moustafa2015unsw} developed the UNSW-NB15 network benchmark to overcome the limitations of legacy datasets such as KDD Cup 1999 and NSL-KDD. Using the IXIA PerfectStorm tool in a synthetic testbed environment, the authors captured 100~GB of raw network traffic spanning modern normal activities and nine contemporary attack families (including Backdoors, DoS, Exploits, Generic attacks, and Reconnaissance). The raw packet traces were processed using the Bro (Zeek) network monitoring tool and custom scripts to extract 49 flow-level statistical, basic, and content features.
+
+\smallskip
+\noindent\textbf{Results and findings:} The study demonstrated that legacy datasets failed to represent modern network protocol dynamics, packet payload distributions, and complex attack signatures. Machine learning models trained on UNSW-NB15 revealed that contemporary attack flows share overlapping feature distributions with normal background traffic, making traditional deterministic signature matching insufficient and emphasizing the necessity of multi-dimensional statistical feature representation.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} The dataset was gathered within a simulated commercial enterprise network environment and primarily captures standard server and client workstation interactions. It does not reflect the specialized lightweight protocol dynamics (such as MQTT, CoAP, and Modbus) or the constrained, bursty telemetry characteristic of operational IoT sensor and actuator networks.
+
+\smallskip
+\noindent\textbf{Application in our research:} This paper informs our feature engineering and data preprocessing methodology (Module M1). In particular, it guides how transport-layer session metadata, connection duration, byte counts, and TCP state flags are aggregated into flow records suitable for lightweight edge inspection.
+
+\subsection{Kitsune: Ensemble of Autoencoders for Online Network Anomaly Detection}
+
+\noindent\textbf{Objective and methodology:} Mirsky et al.~\cite{mirsky2018kitsune} developed Kitsune, an unsupervised online intrusion detection framework designed for resource-constrained network appliances. The system uses an efficient feature extraction mechanism called the Damped Incremental Statistics Tree (D-Stat) to maintain running statistics of packet streams across different temporal decay windows. These features are routed through an ensemble of small, lightweight autoencoders (the KitNET anomaly detector), where each autoencoder monitors a distinct subset of correlated features and flags anomalies based on high reconstruction error.
+
+\smallskip
+\noindent\textbf{Results and findings:} Kitsune demonstrated that accurate anomaly detection could execute online on low-cost hardware, including a single-board Raspberry Pi router, without dropping packets on gigabit connections. The autoencoder ensemble successfully detected novel network attacks, including ARP spoofing, video injection, and botnet propagation, without requiring labelled attack data during its initial setup.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} Kitsune is strictly a binary anomaly screener; it outputs an uncalibrated continuous anomaly score indicating that traffic deviates from the baseline, but cannot classify the threat into specific attack families or provide actionable intelligence for targeted mitigation. Furthermore, it requires periodic baseline updating on normal traffic, rendering it vulnerable to adversarial poisoning if an attack persists during its background training window.
+
+\smallskip
+\noindent\textbf{Application in our research:} Kitsune provides proof that multi-model, streaming anomaly detection is feasible on edge gateway hardware. This directly motivates our decoupled Stage 1 architecture, where an unsupervised screener runs alongside a supervised classifier to identify unfamiliar traffic distributions without burdening the main classification engine.
+
+\subsection{Isolation Forest: Fast Tree-Based Unsupervised Outlier Identification}
+
+\noindent\textbf{Objective and methodology:} Liu et al.~\cite{liu2008isolation} formulated the Isolation Forest algorithm for unsupervised anomaly detection. Instead of constructing statistical profiles of normal data density or calculating expensive pairwise distances between points, the method explicitly isolates anomalies. Exploiting the property that anomalous points are few and structurally distinct in feature space, the algorithm builds an ensemble of completely randomized binary trees (iTrees), where each node splits a randomly selected attribute at a uniformly chosen value between its minimum and maximum. Anomalies are isolated near the root, resulting in shorter average path lengths.
+
+\smallskip
+\noindent\textbf{Results and findings:} The algorithm achieves a low time complexity of $\mathcal{O}(B \cdot \psi \log \psi)$, where $B$ is the tree count and $\psi$ is a small subsample size (typically 256), and requires minimal memory. The authors showed that Isolation Forest outperforms distance-based methods like Local Outlier Factor (LOF) and One-Class SVMs on high-dimensional benchmarks, maintaining high detection fidelity even in datasets containing multiple irrelevant attributes.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} While effective at flagging global spatial outliers, Isolation Forest provides only an uncalibrated binary score (inlier versus outlier). When applied to subtle or stealthy network intrusions whose statistical profiles closely resemble benign traffic, its detection recall is moderate. It cannot serve as a standalone intrusion prevention system because it cannot distinguish between different attack families.
+
+\smallskip
+\noindent\textbf{Application in our research:} Isolation Forest is adopted directly as our Stage 1 anomaly screener (Module M3). Fitted strictly on known baseline training traffic with an untuned threshold, it operates as an autonomous, low-overhead trigger that detects unfamiliar zero-day flows and routes them into a quarantine queue for analyst verification.
+
+\subsection{TON\_IoT: Modern Cyber-Physical and Telemetry Benchmark}
+
+\noindent\textbf{Objective and methodology:} Alsaedi et al.~\cite{alshammari2020toniot} introduced the TON\_IoT telemetry and network dataset, collected from an Industry 4.0 physical-virtual testbed at the Australian Defence Force Academy. The testbed integrated real IoT field devices, physical SCADA systems, industrial sensors, virtual machines, and cloud layers under concurrent operation. The authors executed nine distinct contemporary attack vectors: Backdoors, Denial-of-Service, Distributed Denial-of-Service, Injection attacks, Ransomware, Port Scanning, Password cracking, Man-in-the-Middle, and Cross-Site Scripting.
+
+\smallskip
+\noindent\textbf{Results and findings:} The study established that the TON\_IoT dataset exhibits wide variation in attack volume, reflecting operational conditions where low-rate stealthy attacks (such as MITM sessions comprising only a few hundred records) coexist with aggressive volumetric floods (such as Backdoors and Ransomware comprising tens of thousands of flows). The authors demonstrated that conventional machine learning models show significant performance variations across these attack profiles.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} The dataset contains duplicate flow entries resulting from multiple collection sensors monitoring identical network interfaces. Furthermore, raw IP addresses and default target columns can lead to artificial memorization if not properly cleaned and preprocessed before model training.
+
+\smallskip
+\noindent\textbf{Application in our research:} TON\_IoT serves as our primary experimental testbed. We use its heterogeneous attack profiles to conduct leave-one-attack-out evaluations across low-volume stealthy attacks (MITM) and high-volume attacks (Ransomware, XSS, and Backdoors), evaluating model adaptation across realistic operational volume variations.
+
+\subsection{Overcoming Catastrophic Forgetting: Parameter Regularization and EWC}
+
+\noindent\textbf{Objective and methodology:} Kirkpatrick et al.~\cite{kirkpatrick2017overcoming} addressed the problem of catastrophic forgetting in artificial neural networks, where learning a new task overwrites the network weights required for previous tasks. Drawing inspiration from synaptic consolidation in mammalian brains, the authors proposed Elastic Weight Consolidation (EWC). EWC computes the diagonal elements of the Fisher Information Matrix over earlier task data to identify parameter importance, adding a quadratic regularization penalty to the loss function that slows down learning on weights critical to older tasks.
+
+\smallskip
+\noindent\textbf{Results and findings:} EWC successfully enabled deep networks to learn sequences of separate tasks (such as playing multiple Atari video games sequentially) without forgetting earlier ones. The authors demonstrated that the network retains earlier capabilities by moving along low-loss manifolds in parameter space, achieving a balance between stability and plasticity.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} EWC relies fundamentally on calculating loss gradients and second-order Fisher information matrices across continuous, differentiable parameter spaces. It is mathematically incompatible with non-parametric, rule-based, or decision tree ensembles like Random Forests, which rely on greedy coordinate-aligned splits rather than gradient descent. Furthermore, the memory required to store parameter importance scales with model size.
+
+\smallskip
+\noindent\textbf{Application in our research:} This paper provides the theoretical basis for our understanding of the stability--plasticity dilemma. Recognizing that gradient-based parameter regularization cannot be used with decision tree ensembles on edge gateways led us directly to explore data-level experience replay.
+
+\subsection{Synaptic Intelligence: Online Continual Learning via Path Integral Metrics}
+
+\noindent\textbf{Objective and methodology:} Zenke, Poole, and Ganguli~\cite{zenke2017continual} proposed Synaptic Intelligence (SI) as an alternative continual learning mechanism to resolve catastrophic forgetting. Rather than calculating parameter importance offline at task boundaries using Fisher information, SI calculates an online path integral of the gradient trajectory during standard training, measuring each individual synapse's contribution to changes in the global loss function. Important parameters are then constrained using a quadratic regularization penalty during subsequent task optimization.
+
+\smallskip
+\noindent\textbf{Results and findings:} The authors demonstrated that SI achieves retention on sequential image classification benchmarks comparable to or better than EWC, while computing parameter importance online during training without a separate evaluation pass. This verified that tracking parameter trajectories enables continual adaptation in deep neural architectures.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} Similar to EWC, Synaptic Intelligence is tied strictly to gradient-based continuous optimization. It cannot be applied to decision trees, where parameter updates are discrete and non-differentiable. Additionally, tracking trajectory metrics for every weight increases runtime memory overhead during training.
+
+\smallskip
+\noindent\textbf{Application in our research:} The conceptual foundation of Synaptic Intelligence reinforces the importance of tracking class retention during model updates. This guided our development of the Plasticity--Stability Index (PSI) to measure the balance between acquiring new attack classes and retaining older ones.
+
+\subsection{iCaRL: Incremental Classifier and Representation Learning via Exemplars}
+
+\noindent\textbf{Objective and methodology:} Rebuffi et al.~\cite{rebuffi2017icarl} introduced iCaRL, an exemplar-based continual learning framework for class-incremental learning in computer vision. When exposed to a stream of new classes, iCaRL stores a small, fixed-size memory buffer of exemplar samples from earlier classes. Classification is performed using a nearest-mean-of-exemplars rule in feature space, and exemplar sets are selected using herding to approximate the true class mean. During model updates, the buffered exemplars are combined with new class data using distillation loss to prevent representational drift.
+
+\smallskip
+\noindent\textbf{Results and findings:} The study proved that retaining a small, well-chosen subset of past training examples preserves class decision boundaries across long sequences of new tasks, outperforming regularization-only methods. The authors showed that data-level replay prevents decision boundaries from collapsing toward newly added classes.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} iCaRL was engineered around deep convolutional feature extractors and relies on a static, fixed total memory budget divided evenly among all seen classes ($m = B/K$). When incoming class volumes vary significantly, this static allocation causes class imbalance in the replay buffer.
+
+\smallskip
+\noindent\textbf{Application in our research:} iCaRL demonstrates that exemplar replay is a practical way to maintain past knowledge during incremental learning. This directly supports our choice of experience replay as the adaptation mechanism for tree ensembles on edge gateways.
+
+\subsection{Tiny Episodic Memories: Sample-Efficient Continual Learning via Buffer Replay}
+
+\noindent\textbf{Objective and methodology:} Chaudhry et al.~\cite{chaudhry2019tiny} investigated the empirical performance of tiny episodic memory buffers in continual learning. Comparing complex parameter-regularization techniques against rehearsal replay on sequential benchmarks (including Split-CIFAR and MiniImageNet), the authors evaluated how many past exemplars a model actually needs to prevent catastrophic forgetting, testing static buffers alongside random reservoir sampling based on Vitter's Algorithm~R~\cite{vitter1985random}.
+
+\smallskip
+\noindent\textbf{Results and findings:} The paper delivered a key empirical finding: extremely small replay buffers (as few as 10 to 50 samples per class) matched or outperformed complex parameter regularization algorithms like EWC and GEM, while requiring substantially lower computational overhead. Storing a handful of past samples acts as a strong geometric anchor during retraining, preventing decision boundary collapse with minimal memory cost.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} The authors evaluated memory sizes only under balanced benchmark conditions where all tasks had equal numbers of samples. They did not investigate the volumetric imbalance that occurs in network security, where a new attack batch can contain ten to twenty times more flows than the historical buffer.
+
+\smallskip
+\noindent\textbf{Application in our research:} This paper directly motivates our Phase 7.1 sensitivity experiments, where we systematically reduce historical buffer capacity down to 25 samples per class to find the minimum memory needed to prevent forgetting on an edge gateway.
+
+\subsection{Gradient Episodic Memory (GEM): Constrained Optimization in Continual Learning}
+
+\noindent\textbf{Objective and methodology:} Lopez-Paz and Ranzato~\cite{lopezpaz2017gem} developed Gradient Episodic Memory (GEM) to balance backward and forward transfer in lifelong learning. GEM maintains an episodic memory buffer for each past task. When optimizing the model on a new task, the loss gradients are projected using quadratic programming to ensure that the updated weights do not increase the loss on any stored past exemplars, turning replay into an inequality-constrained optimization problem.
+
+\smallskip
+\noindent\textbf{Results and findings:} GEM demonstrated strong backward transfer (BWT), proving that constrained replay updates not only prevent catastrophic forgetting but can sometimes improve performance on earlier tasks. The authors formalized the mathematical definitions of backward transfer and average forgetting that are now standard across continual learning research.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} GEM requires solving a dual quadratic programming problem over all stored exemplars at every gradient step. This makes it computationally heavy and impractical for resource-constrained edge gateways. Furthermore, its mathematical formulation requires continuous gradient vectors, making it incompatible with decision tree ensembles.
+
+\smallskip
+\noindent\textbf{Application in our research:} We adopt the formal mathematical definitions of Backward Transfer ($\text{BWT} = -\mathcal{F}_{\text{avg}}$) and per-class forgetting introduced in GEM, using them to evaluate model stability in Module M7.
+
+\subsection{Replay or Regret: Benchmarking Continual Learning in Network Intrusion Detection}
+
+\noindent\textbf{Objective and methodology:} Cormier, Labio, and Garc{\'i}a~\cite{replay_or_regret2023} conducted an empirical study comparing continual learning methods on network intrusion detection datasets. The authors evaluated parameter regularization (EWC), knowledge distillation (LwF), and rehearsal-based experience replay across sequential multi-class attack streams, tracking model performance as new attack classes were introduced one after another.
+
+\smallskip
+\noindent\textbf{Results and findings:} The study found that rehearsal-based experience replay consistently outperformed parameter regularization and distillation methods in retaining multi-class detection accuracy. Replay maintained high detection rates on earlier attack classes, whereas regularization-only approaches suffered substantial accuracy drops as task sequences grew longer.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} The authors used a fixed static buffer quota (e.g., a constant 50 or 100 samples per class) throughout their experiments, and did not examine what happens when incoming novel attacks are volumetric. Furthermore, they did not investigate how class imbalance affects CART Gini impurity calculations during decision tree retraining.
+
+\smallskip
+\noindent\textbf{Application in our research:} This paper represents the closest prior work to our investigation. Its findings confirm that replay is the most effective continual learning strategy for intrusion detection. Crucially, its reliance on fixed buffer quotas defines the starting point for our work on Dynamic Replay.
+
+\subsection{Zero-Day Attack Detection in the Internet of Things: Contemporary Challenges}
+
+\noindent\textbf{Objective and methodology:} Shiltagh and Al-Jamali~\cite{shiltagh2025zeroday} surveyed recent techniques for detecting zero-day attacks in IoT networks. The authors evaluated supervised classifiers, deep learning architectures, and unsupervised anomaly detectors, analyzing the operational challenges of deploying these models in real-world environments.
+
+\smallskip
+\noindent\textbf{Results and findings:} The survey highlighted the disconnect between anomaly detection and model adaptation in published literature. While unsupervised detectors can flag unusual traffic, they cannot identify the specific attack type. Meanwhile, supervised classifiers perform well on familiar attacks but fail completely when confronted with novel intrusions, misclassifying unseen attacks into existing categories. The authors emphasized the need for adaptive systems that can turn anomaly detections into updated multi-class decision boundaries on edge devices.
+
+\smallskip
+\noindent\textbf{Limitations and scope:} The survey focuses on high-level architectural concepts and taxonomy without providing a concrete implementation, mathematical framework, or empirical evaluation of on-device continual retraining.
+
+\smallskip
+\noindent\textbf{Application in our research:} This paper confirms the real-world need for our two-stage architecture, which bridges the gap between unsupervised anomaly screening (Stage 1) and low-latency on-device model adaptation (Stage 2).
+
+\section{Summary}
+\label{sec:summary}
+
+The twelve research papers reviewed in this chapter provide the foundational context, algorithmic tools, and benchmark comparisons that frame our study:
+
 \begin{enumerate}
-    \item \textbf{Statistical and Distance-Based Detectors:} Methods such as One-Class Support Vector Machines (OC-SVM) and Local Outlier Factor (LOF) delineate high-density regions of benign behavior. While mathematically rigorous, their computational complexity scales quadratically with dataset volume ($\mathcal{O}(N^2)$), rendering them impractical for high-speed IoT gateway monitoring.
-    \item \textbf{Tree-Based Ensembles (Isolation Forests):} Proposed by Liu et al., Isolation Forests isolate anomalies by recursively partitioning feature space using random orthogonal hyperplanes. Since anomalies are mathematically few and qualitatively divergent, they exhibit significantly shorter average path lengths in binary isolation trees. Isolation Forests achieve linear computational complexity ($\mathcal{O}(N \log N)$) and low memory consumption, making them the leading candidate for resource-constrained edge computing.
-    \item \textbf{Deep Autoencoders and Variational Autoencoders (VAEs):} Deep neural autoencoders reconstruct benign network features through an informational bottleneck. Flows yielding high reconstruction errors are flagged as anomalies. While capable of learning rich latent representations, deep autoencoders require extensive graphics processing unit (GPU) acceleration and hyperparameter tuning, which exceeds the thermal and architectural capabilities of edge microcontrollers.
+    \item \textbf{Supervised Classification and Tree Ensembles:} Breiman~\cite{breiman2001random} established Random Forests as fast, robust classifiers for tabular data, while Moustafa and Slay~\cite{moustafa2015unsw} and Alsaedi et al.~\cite{alshammari2020toniot} provided realistic intrusion benchmarks. Together, they demonstrate that while tree ensembles achieve high accuracy on known traffic, they operate under a closed-world assumption that fails when previously unseen attacks arrive.
+    \item \textbf{Unsupervised Anomaly Screening:} Mirsky et al.~\cite{mirsky2018kitsune} and Liu et al.~\cite{liu2008isolation} showed that unsupervised anomaly detectors can isolate unfamiliar traffic patterns without requiring attack labels during training. However, because these methods yield only binary outlier scores, they are best suited as triggers for adaptation rather than standalone multi-class classifiers, a gap highlighted by Shiltagh and Al-Jamali~\cite{shiltagh2025zeroday}.
+    \item \textbf{Continual Learning and Catastrophic Forgetting:} Kirkpatrick et al.~\cite{kirkpatrick2017overcoming} and Zenke et al.~\cite{zenke2017continual} demonstrated that sequential model updates cause catastrophic forgetting, but their regularization techniques require differentiable neural networks. Rebuffi et al.~\cite{rebuffi2017icarl}, Chaudhry et al.~\cite{chaudhry2019tiny}, and Lopez-Paz and Ranzato~\cite{lopezpaz2017gem} proved that experience replay works at the data level, making it compatible with non-parametric decision tree ensembles.
+    \item \textbf{The Replay Gap in Intrusion Detection:} While Cormier et al.~\cite{replay_or_regret2023} confirmed that experience replay is the most effective continual learning strategy for intrusion detection, existing approaches rely on fixed static buffer quotas. When an incoming attack is volumetric, this fixed allocation breaks down, causing severe catastrophic forgetting on earlier classes.
 \end{enumerate}
 
-Despite their theoretical appeal for zero-day threat discovery, unsupervised anomaly detectors exhibit severe practical drawbacks in operational settings. First, normal IoT traffic is frequently noisy and bursting (e.g., periodic sensor updates, network reconnections), leading to unacceptable false-positive rates that trigger alert fatigue for security operations teams. Second, anomaly detectors only generate binary alarm signals; they lack multi-class discriminatory granularity, cannot distinguish between attack types (e.g., differentiating benign misconfigurations from active MITM exploits), and possess no native mechanism to update downstream classification engines.
+Table~\ref{tab1} synthesizes the key literature surveyed across intrusion detection, anomaly screening, and continual learning, highlighting their core methodology, strengths, and limitations.
 
-\section{Continual Learning Paradigms}
-Continual Learning (also known as Lifelong Learning or Incremental Learning) provides the foundational mathematical framework to overcome static model obsolescence. Continual learning algorithms are categorized into three primary structural paradigms:
+\begin{table}[htpb]
+\small
+\renewcommand{\arraystretch}{1.4}
+\caption{Summary of representative literature across intrusion detection, anomaly screening, and continual learning}
+\label{tab1}
+\begin{tabular}{|p{2.6cm}|p{2.6cm}|p{4.2cm}|p{4.6cm}|}
+\hline
+\textbf{Authors} & \textbf{Contextual Factors} & \textbf{Definition / Methodology} & \textbf{Findings \& Limitations} \\ \hline
+Breiman (2001)~\cite{breiman2001random} & Supervised tree ensembles & Bagging of unpruned decision trees with random feature subspace selection. & High multi-class accuracy and fast inference on tabular data, but operates under a closed-world class assumption. \\ \hline
+Liu et al. (2008)~\cite{liu2008isolation} & Unsupervised anomaly screening & Randomized binary isolation trees that isolate outliers with short path lengths. & Fast linear time complexity, but produces only binary anomaly scores and cannot classify attack types. \\ \hline
+Kirkpatrick et al. (2017)~\cite{kirkpatrick2017overcoming} & Weight regularization in continual learning & Elastic Weight Consolidation (EWC) penalizing parameter shifts weighted by Fisher information. & Reduces forgetting without storing past samples, but applies only to differentiable neural networks. \\ \hline
+Lopez-Paz and Ranzato (2017)~\cite{lopezpaz2017gem} & Episodic memory replay & Gradient Episodic Memory (GEM) projecting gradients to protect past task losses. & Strong retention across sequential tasks, but solving quadratic programs per update is too heavy for IoT gateways. \\ \hline
+Mirsky et al. (2018)~\cite{mirsky2018kitsune} & Online edge NIDS screening & Ensemble of lightweight autoencoders running on damped incremental packet statistics. & Real-time anomaly detection on low-cost hardware, but outputs only an anomaly score without multi-class labels. \\ \hline
+Alsaedi et al. (2020)~\cite{alshammari2020toniot} & Heterogeneous IoT telemetry & TON\_IoT dataset capturing multi-layer edge, fog, and cloud flows across nine attack families. & Provides realistic attack volume variation (rare MITM vs.\ volumetric XSS/backdoor), exposing static classifier blindness. \\ \hline
+Chaudhry et al. (2019)~\cite{chaudhry2019tiny} & Sample-efficient replay & Tiny episodic buffers evaluated across sequential task benchmarks. & Shows that small buffers (10--50 samples/class) effectively prevent forgetting, but tested only on balanced task data. \\ \hline
+Cormier et al. (2023)~\cite{replay_or_regret2023} & Continual learning for NIDS & Benchmark of EWC, LwF, and static experience replay across intrusion detection streams. & Confirms replay outperforms regularization in NIDS, but uses fixed buffer quotas that fail under volumetric imbalance. \\ \hline
+Shiltagh and Al-Jamali (2025)~\cite{shiltagh2025zeroday} & Zero-day IoT attack detection & Survey of supervised and anomaly-based detectors against unseen IoT intrusions. & Highlights the disconnect between initial zero-day flagging and subsequent on-device adaptation of the classifier. \\ \hline
+\end{tabular}
+\end{table}
 
-\subsection{Regularization-Based Approaches}
-Regularization methods prevent catastrophic forgetting by penalizing modifications to model parameters that were critical for historical tasks. 
-\begin{itemize}
-    \item \textbf{Elastic Weight Consolidation (EWC):} Proposed by Kirkpatrick et al., EWC calculates the diagonal elements of the Fisher Information Matrix to identify parameter sensitivity. When updating the model on task $T_2$, quadratic penalties are applied to parameter shifts along high-curvature dimensions corresponding to task $T_1$.
-    \item \textbf{Synaptic Intelligence (SI):} Zenke et al. introduced path-integral metrics to measure parameter importance online during gradient descent trajectories.
-\end{itemize}
-While computationally elegant and requiring zero historical sample storage, regularization techniques suffer from two fatal weaknesses in cybersecurity applications: they struggle under long task sequences (as parameter capacity quickly saturates) and are fundamentally restricted to differentiable neural networks, precluding their use with high-performing, resource-efficient tree ensemble models.
-
-\subsection{Parameter Isolation and Architecture-Expanding Approaches}
-Parameter isolation methods allocate dedicated sub-networks or dynamically expand model architecture when encountering new tasks (e.g., Progressive Neural Networks, PackNet). While completely eliminating catastrophic forgetting, the architectural complexity and memory footprint scale linearly with the number of encountered tasks ($\mathcal{O}(T)$), violating the rigid hardware constraints of IoT devices.
-
-\subsection{Replay-Based Approaches (Experience Replay)}
-Replay methods mitigate catastrophic forgetting by retaining or generating representative historical exemplars and re-exposing them to the learning algorithm during new task optimization. Experience replay remains the most empirically robust continual learning strategy in non-stationary environments.
-\begin{itemize}
-    \item \textbf{Generative Replay:} Generative Adversarial Networks (GANs) or diffusion models synthesize pseudo-historical samples. However, training generative networks on edge IoT hardware is computationally prohibitive and prone to mode collapse.
-    \item \textbf{Exemplar Replay:} Historical training samples are preserved in an episodic replay buffer. During novel task learning, exemplars are combined with new task data. Replay buffers are natively compatible with both neural architectures and ensemble decision trees.
-\end{itemize}
-
-\section{Replay in Cybersecurity and the Memory Bottleneck}
-Recent pioneering work by researchers has begun evaluating continual learning within the cybersecurity domain. Notably, the landmark study \textit{``Replay or Regret: Evaluating Continual Learning Methods for Robust Intrusion Detection''} systematically benchmarked regularization and replay methods across multi-class network traffic streams. The authors unequivocally demonstrated that rehearsal-based replay methods consistently outperform parameter regularization across network intrusion benchmarks.
-
-However, existing literature universally relies on one of two flawed memory assumptions:
-\begin{enumerate}
-    \item \textbf{The Infinite Buffer / Full Retraining Assumption:} Models assume access to an unconstrained centralized repository where all historical training data is permanently retained. Full joint retraining is triggered whenever new attacks are identified. As previously emphasized, this brute-force approach requires storing hundreds of thousands of high-dimensional flow records, which is impossible on edge IoT devices with constrained flash storage.
-    \item \textbf{The Arbitrary Static Buffer Assumption:} When memory limits are imposed, researchers uniformly assign an arbitrary, fixed static buffer size (e.g., $k = 50$ or $k = 100$ samples per class).
-\end{enumerate}
-
-\section{Critical Research Gaps in Contemporary Literature}
-A rigorous synthesis of the related literature reveals three critical research gaps:
-\begin{itemize}
-    \item \textbf{Research Gap 1: Disconnected Zero-Day Detection and Model Adaptation:} Existing systems either focus on detecting anomalies or on incremental training, but fail to integrate both into an autonomous, closed-loop pipeline where isolated zero-day anomalies seamlessly trigger on-device adaptation.
-    \item \textbf{Research Gap 2: The Full Retraining Imbalance Vulnerability:} Prior literature assumes full retraining is the optimal performance ceiling. However, the severe class imbalance induced when small zero-day attack batches are submerged within massive historical datasets has been largely overlooked.
-    \item \textbf{Research Gap 3: Volumetric Vulnerability of Static Buffers:} Contemporary continual NIDS literature assumes static memory buffers. The vulnerability of fixed buffers when confronted with varying incoming attack volumes—where massive attacks overwhelm the buffer and trigger severe catastrophic forgetting spikes—remains unaddressed.
-\end{itemize}
-
-This thesis directly bridges these critical gaps by architecting an integrated, volume-aware Dynamic Continual Learning framework tailored specifically for resource-constrained IoT edge environments.
+These findings confirm the need for our proposed two-stage continual intrusion detection framework: Stage 1 uses an unsupervised Isolation Forest as a lightweight tripwire to detect novel attacks, and Stage 2 uses our volume-aware Dynamic Replay rule to adapt the Random Forest classifier on the gateway without catastrophic forgetting. The next chapter details the architectural design, formal requirements, and mathematical formulation of this system.

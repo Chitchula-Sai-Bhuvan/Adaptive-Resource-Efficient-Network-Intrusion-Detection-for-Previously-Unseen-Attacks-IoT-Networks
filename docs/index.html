@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adaptive & Resource-Efficient IoT NIDS | Continual Learning Portal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- MathJax for KaTeX/LaTeX rendering -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e40af',
+                        secondary: '#0f766e',
+                        accent: '#3b82f6',
+                        darkBg: '#0f172a',
+                        cardBg: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased font-sans">
+
+    <!-- NAVIGATION BAR -->
+    <nav class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-blue-700 flex items-center justify-center text-white font-bold text-xl shadow-md">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div>
+                        <span class="font-bold text-lg text-slate-900 tracking-tight">Adaptive IoT NIDS</span>
+                        <span class="hidden sm:inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">Continual Learning</span>
+                    </div>
+                </div>
+                <div class="hidden md:flex space-x-6 text-sm font-medium text-slate-600">
+                    <a href="#overview" class="hover:text-blue-700 transition">Overview</a>
+                    <a href="#architecture" class="hover:text-blue-700 transition">Architecture</a>
+                    <a href="#calculator" class="hover:text-blue-700 transition">Interactive Calculator</a>
+                    <a href="#results" class="hover:text-blue-700 transition">Results</a>
+                    <a href="#gallery" class="hover:text-blue-700 transition">Gallery</a>
+                    <a href="#team" class="hover:text-blue-700 transition">Team</a>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <a href="https://github.com/Chitchula-Sai-Bhuvan/Adaptive-Resource-Efficient-Network-Intrusion-Detection-for-Previously-Unseen-Attacks-IoT-Networks" target="_blank" class="inline-flex items-center space-x-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition shadow">
+                        <i class="fa-brands fa-github text-base"></i>
+                        <span>Repository</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <header id="overview" class="relative overflow-hidden bg-gradient-to-b from-blue-50/60 via-white to-slate-50 py-16 sm:py-24 border-b border-slate-200">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold mb-6">
+                <span>IEEE Conference Research Project</span>
+                <span>•</span>
+                <span>M.Tech Dissertation Phase I</span>
+            </div>
+            <h1 class="text-3xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight max-w-4xl mx-auto">
+                Adaptive & Resource-Efficient Network Intrusion Detection for Previously Unseen Attacks in IoT Networks
+            </h1>
+            <p class="mt-6 text-lg sm:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
+                An autonomous, two-stage continual learning framework combining unsupervised novelty screening with a volume-aware <strong class="text-slate-900 font-semibold">Dynamic Replay Buffer</strong> to neutralize catastrophic forgetting on resource-constrained edge gateways.
+            </p>
+
+            <!-- AUTHORS & INSTITUTION -->
+            <div class="mt-8 flex flex-wrap justify-center items-center gap-6 text-sm text-slate-700">
+                <div class="flex items-center space-x-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200">
+                    <i class="fa-solid fa-user-graduate text-blue-600"></i>
+                    <span class="font-semibold text-slate-900">Chitchula Sai Bhuvan</span>
+                    <span class="text-slate-400">|</span>
+                    <span class="text-xs text-slate-500">cb.sc.p2cse25007@cb.students.amrita.edu</span>
+                </div>
+                <div class="flex items-center space-x-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200">
+                    <i class="fa-solid fa-chalkboard-user text-teal-600"></i>
+                    <span class="font-semibold text-slate-900">Dr. Panduranga Ravi Teja</span>
+                    <span class="text-slate-400">|</span>
+                    <span class="text-xs text-slate-500">Faculty Guide</span>
+                </div>
+            </div>
+            <p class="mt-3 text-xs text-slate-500">
+                Department of Computer Science and Engineering, Amrita School of Computing, Amrita Vishwa Vidyapeetham, Coimbatore, India
+            </p>
+
+            <!-- ACTION BUTTONS & METRICS -->
+            <div class="mt-10 flex flex-wrap justify-center gap-4">
+                <a href="https://github.com/Chitchula-Sai-Bhuvan/Adaptive-Resource-Efficient-Network-Intrusion-Detection-for-Previously-Unseen-Attacks-IoT-Networks" target="_blank" class="inline-flex items-center px-6 py-3 rounded-xl bg-blue-700 text-white font-semibold shadow-lg hover:bg-blue-800 transition">
+                    <i class="fa-brands fa-github mr-2"></i> View Open-Source Code
+                </a>
+                <a href="#results" class="inline-flex items-center px-6 py-3 rounded-xl bg-white border border-slate-300 text-slate-700 font-semibold shadow-sm hover:bg-slate-50 transition">
+                    <i class="fa-solid fa-chart-line mr-2 text-blue-600"></i> Benchmark Results
+                </a>
+                <a href="#calculator" class="inline-flex items-center px-6 py-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 font-semibold shadow-sm hover:bg-teal-100 transition">
+                    <i class="fa-solid fa-calculator mr-2 text-teal-600"></i> Interactive Replay Simulator
+                </a>
+            </div>
+
+            <!-- KEY STATS STRIP -->
+            <div class="mt-14 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
+                    <div class="text-3xl font-extrabold text-blue-700">0.9773</div>
+                    <div class="text-xs font-medium text-slate-500 mt-1">Novel MITM F1 (vs 0.6483 Full)</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
+                    <div class="text-3xl font-extrabold text-teal-600">35.9%</div>
+                    <div class="text-xs font-medium text-slate-500 mt-1">Forgetting Suppression Cut</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
+                    <div class="text-3xl font-extrabold text-indigo-600">&gt;96.7%</div>
+                    <div class="text-xs font-medium text-slate-500 mt-1">Memory Storage Saved</div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
+                    <div class="text-3xl font-extrabold text-emerald-600">&lt;0.085s</div>
+                    <div class="text-xs font-medium text-slate-500 mt-1">On-Device Adaptation Latency</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- PROBLEM STATEMENT & GAPS -->
+    <section class="py-16 bg-white border-b border-slate-200">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto">
+                <h2 class="text-xs font-bold text-blue-700 tracking-widest uppercase">The Core Challenges</h2>
+                <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">Why Conventional IoT Intrusion Detectors Break Down</h3>
+            </div>
+
+            <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- CARD 1 -->
+                <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div class="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center text-xl font-bold mb-4">
+                        <i class="fa-solid fa-eye-slash"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-slate-900">Closed-World Failure</h4>
+                    <p class="text-sm text-slate-600 mt-2 leading-relaxed">
+                        Classifiers assume test traffic matches known labels: \(\mathcal{P}_{test} = \mathcal{P}_{train}\). When zero-day attacks emerge, models force-map them to known classes, yielding exact <strong>0.0000 F1</strong> and allowing <strong>29.26%</strong> of attacks to pass silently into benign traffic.
+                    </p>
+                </div>
+
+                <!-- CARD 2 -->
+                <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div class="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl font-bold mb-4">
+                        <i class="fa-solid fa-hourglass-end"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-slate-900">Catastrophic Forgetting</h4>
+                    <p class="text-sm text-slate-600 mt-2 leading-relaxed">
+                        Updating models incrementally causes CART decision trees to greedily overwrite legacy split boundaries. Under high-volume attacks, static replay buffers suffer catastrophic degradation of up to <strong>39.72%</strong> on historical classes.
+                    </p>
+                </div>
+
+                <!-- CARD 3 -->
+                <div class="p-6 bg-slate-50 rounded-2xl border border-slate-200">
+                    <div class="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-xl font-bold mb-4">
+                        <i class="fa-solid fa-filter-circle-xmark"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-slate-900">The Gini Dilution Trap</h4>
+                    <p class="text-sm text-slate-600 mt-2 leading-relaxed">
+                        Full historical retraining pools compact novel threats (\(M \approx 207\)) with massive archives (\(N \approx 128{,}000\)). At \(0.16\%\) representation, candidate splits isolating novel threats yield negligible Gini reduction, achieving only <strong>0.6483 F1</strong>.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ARCHITECTURE SECTION -->
+    <section id="architecture" class="py-16 bg-slate-50 border-b border-slate-200">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto">
+                <h2 class="text-xs font-bold text-blue-700 tracking-widest uppercase">System Design</h2>
+                <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">Two-Stage Decoupled Edge Architecture</h3>
+                <p class="text-slate-600 text-sm mt-3">Combining high-throughput line-rate flow inspection with on-demand bounded edge retraining.</p>
+            </div>
+
+            <!-- MODULES GRID -->
+            <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                <div class="space-y-4">
+                    <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex items-start space-x-4">
+                        <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold flex items-center justify-center flex-shrink-0">M1</div>
+                        <div>
+                            <h4 class="font-bold text-slate-900 text-sm">Flow Preprocessing & De-Identification</h4>
+                            <p class="text-xs text-slate-600 mt-1">Strips IP/MAC/ports and timestamps; eliminates 27,451 exact duplicates; train-only median/mode imputation prevents leakage.</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex items-start space-x-4">
+                        <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold flex items-center justify-center flex-shrink-0">M2</div>
+                        <div>
+                            <h4 class="font-bold text-slate-900 text-sm">Supervised Random Forest Classifier</h4>
+                            <p class="text-xs text-slate-600 mt-1">Ensemble of 100 decision trees operating at line-rate; outputs multiclass labels for known traffic with 99.02% accuracy.</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-white rounded-xl border border-amber-200 bg-amber-50/40 shadow-sm flex items-start space-x-4">
+                        <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 font-bold flex items-center justify-center flex-shrink-0">M3</div>
+                        <div>
+                            <h4 class="font-bold text-slate-900 text-sm">Unsupervised Isolation Forest Novelty Screener</h4>
+                            <p class="text-xs text-slate-600 mt-1">Computes anomaly score \(s(\mathbf{x}, n) = 2^{-\mathbb{E}[h(\mathbf{x})]/c(n)}\). Flags out-of-distribution flows with 7x anomaly concentration.</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-white rounded-xl border border-emerald-200 bg-emerald-50/40 shadow-sm flex items-start space-x-4">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center flex-shrink-0">M5</div>
+                        <div>
+                            <h4 class="font-bold text-slate-900 text-sm">Dynamic Replay Buffer Allocation</h4>
+                            <p class="text-xs text-slate-600 mt-1">Calculates volume-aware historical quota \(k_{\text{dyn}} = \lfloor M/K \rfloor\) bounded by \([k_{\min}=100, k_{\max}=555]\), balancing \(\rho \approx 1.0\).</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex items-start space-x-4">
+                        <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 font-bold flex items-center justify-center flex-shrink-0">M6</div>
+                        <div>
+                            <h4 class="font-bold text-slate-900 text-sm">Sub-0.085s Edge Adaptation Engine</h4>
+                            <p class="text-xs text-slate-600 mt-1">Refits ensemble on \(\mathcal{B} \cup \mathcal{D}_{\text{new}}\) directly on ARM CPU and atomically hot-swaps active decision boundaries.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FORMULA CARD -->
+                <div class="bg-slate-900 text-white p-8 rounded-3xl shadow-xl border border-slate-800">
+                    <div class="text-xs font-mono uppercase tracking-wider text-teal-400">Mathematical Formulation</div>
+                    <h4 class="text-xl font-bold mt-2 text-white">Dynamic Replay Allocation Rule</h4>
+                    
+                    <div class="my-6 p-4 bg-slate-800/80 rounded-xl border border-slate-700 font-mono text-center text-lg text-emerald-300">
+                        $$k_{\text{dyn}} = \min\!\left( k_{\max},\; \max\!\left( k_{\min},\; \left\lfloor \frac{M \cdot \alpha}{K} \right\rfloor \right) \right)$$
+                    </div>
+
+                    <ul class="space-y-3 text-xs text-slate-300 leading-relaxed">
+                        <li><span class="text-teal-400 font-bold">• Floor Regime (\(M < 900\)):</span> Enforces \(k_{\min}=100\) samples/class to guarantee representation and prevent class starvation.</li>
+                        <li><span class="text-teal-400 font-bold">• Proportional Scaling (\(900 \le M \le 5{,}000\)):</span> Scales quota linearly with attack volume to maintain balance ratio \(\rho \approx 1.0\).</li>
+                        <li><span class="text-teal-400 font-bold">• Hardware Ceiling (\(M > 5{,}000\)):</span> Capped at \(k_{\max}=555\) flows/class to bound RAM memory strictly below 1\,MB.</li>
+                    </ul>
+
+                    <div class="mt-6 pt-6 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+                        <span>Computational Complexity: \(\mathcal{O}(B \cdot \sqrt{d} \cdot n \log n)\)</span>
+                        <span class="text-emerald-400 font-semibold">&gt;94% Speedup</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATOR / CALCULATOR -->
+    <section id="calculator" class="py-16 bg-white border-b border-slate-200">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <span class="px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-xs font-bold uppercase tracking-wider">Live Simulation</span>
+                <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">Dynamic Replay Buffer Calculator</h3>
+                <p class="text-slate-600 text-sm mt-2">Simulate on-device memory allocation and savings for any arbitrary novel attack volume.</p>
+            </div>
+
+            <div class="mt-10 bg-slate-50 p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label for="novelVolume" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Novel Attack Volume (\(M\) flows)</label>
+                        <input type="number" id="novelVolume" value="2853" min="10" max="20000" class="w-full px-4 py-3 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <div class="flex justify-between text-xs text-slate-500 mt-2">
+                            <button type="button" onclick="setVolume(207)" class="hover:text-blue-600 underline">MITM (207)</button>
+                            <button type="button" onclick="setVolume(2853)" class="hover:text-blue-600 underline">Ransomware (2,853)</button>
+                            <button type="button" onclick="setVolume(2903)" class="hover:text-blue-600 underline">XSS (2,903)</button>
+                            <button type="button" onclick="setVolume(3742)" class="hover:text-blue-600 underline">Backdoor (3,742)</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="knownClasses" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Known Historical Classes (\(K\))</label>
+                        <input type="number" id="knownClasses" value="9" min="2" max="50" class="w-full px-4 py-3 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <p class="text-xs text-slate-500 mt-2">Default: 9 TON_IoT classes (Normal + 8 Attacks)</p>
+                    </div>
+                </div>
+
+                <!-- OUTPUT DISPLAY CARDS -->
+                <div class="mt-8 pt-8 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                    <div class="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="text-xs text-slate-500 font-medium">Replay Quota (\(k_{\text{dyn}}\))</div>
+                        <div id="resQuota" class="text-2xl font-extrabold text-blue-700 mt-1">317</div>
+                        <div class="text-[10px] text-slate-400 mt-1">flows per known class</div>
+                    </div>
+
+                    <div class="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="text-xs text-slate-500 font-medium">Total Buffer (\(|\mathcal{B}|\))</div>
+                        <div id="resTotalBuffer" class="text-2xl font-extrabold text-teal-600 mt-1">2,853</div>
+                        <div class="text-[10px] text-slate-400 mt-1">historical exemplars</div>
+                    </div>
+
+                    <div class="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="text-xs text-slate-500 font-medium">Storage Reduction</div>
+                        <div id="resSavings" class="text-2xl font-extrabold text-indigo-600 mt-1">97.59%</div>
+                        <div class="text-[10px] text-slate-400 mt-1">vs full archive (118k)</div>
+                    </div>
+
+                    <div class="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="text-xs text-slate-500 font-medium">RAM Footprint</div>
+                        <div id="resMemory" class="text-2xl font-extrabold text-emerald-600 mt-1">547.8 KB</div>
+                        <div class="text-[10px] text-slate-400 mt-1">&lt; 1 MB hardware bound</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- EMPIRICAL RESULTS -->
+    <section id="results" class="py-16 bg-slate-50 border-b border-slate-200">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto">
+                <h2 class="text-xs font-bold text-blue-700 tracking-widest uppercase">Empirical Benchmark</h2>
+                <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">Experimental Results on TON_IoT</h3>
+                <p class="text-slate-600 text-sm mt-3">Evaluated across 183,592 clean, deduplicated flows across 4 diverse leave-one-attack-out scenarios.</p>
+            </div>
+
+            <!-- TABLE: STEALTH ATTACK -->
+            <div class="mt-12 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 sm:p-8">
+                <h4 class="text-lg font-bold text-slate-900 mb-4 flex items-center">
+                    <span class="w-3 h-3 rounded-full bg-blue-600 mr-2"></span>
+                    Stealth Low-Volume Attack Benchmark (MITM, \(M = 207\) flows)
+                </h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-600">
+                        <thead class="bg-slate-50 text-slate-900 uppercase text-xs font-bold border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4">Strategy</th>
+                                <th class="py-3 px-4">Replay Memory</th>
+                                <th class="py-3 px-4">Storage Saved</th>
+                                <th class="py-3 px-4">Novel F1</th>
+                                <th class="py-3 px-4">Known Macro-F1</th>
+                                <th class="py-3 px-4">Mean Forgetting (\(\mathcal{F}_{\text{avg}}\))</th>
+                                <th class="py-3 px-4">Latency</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 font-medium">
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-3 px-4 font-bold text-slate-900">No Update (Baseline)</td>
+                                <td class="py-3 px-4">127,787 pkts</td>
+                                <td class="py-3 px-4">0.00%</td>
+                                <td class="py-3 px-4 text-red-600 font-bold">0.0000</td>
+                                <td class="py-3 px-4">0.9890</td>
+                                <td class="py-3 px-4">0.0000</td>
+                                <td class="py-3 px-4 text-slate-400">--</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-3 px-4 font-bold text-slate-900">Full Retraining (Joint)</td>
+                                <td class="py-3 px-4">127,787 pkts</td>
+                                <td class="py-3 px-4">0.00%</td>
+                                <td class="py-3 px-4 text-amber-600 font-bold">0.6483</td>
+                                <td class="py-3 px-4">0.9891</td>
+                                <td class="py-3 px-4">-0.0002</td>
+                                <td class="py-3 px-4">0.7355 s</td>
+                            </tr>
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-3 px-4 font-bold text-slate-900">Static Replay (\(k=100\))</td>
+                                <td class="py-3 px-4">900 pkts</td>
+                                <td class="py-3 px-4">99.30%</td>
+                                <td class="py-3 px-4 text-emerald-600 font-bold">0.9773</td>
+                                <td class="py-3 px-4">0.9628</td>
+                                <td class="py-3 px-4">0.0262</td>
+                                <td class="py-3 px-4">0.0607 s</td>
+                            </tr>
+                            <tr class="bg-blue-50/60 hover:bg-blue-50">
+                                <td class="py-3 px-4 font-extrabold text-blue-900">Dynamic Replay (Proposed)</td>
+                                <td class="py-3 px-4 font-bold text-blue-900">900 pkts</td>
+                                <td class="py-3 px-4 font-bold text-blue-900">99.30%</td>
+                                <td class="py-3 px-4 font-black text-blue-700 text-base">0.9773</td>
+                                <td class="py-3 px-4 font-bold text-blue-900">0.9628</td>
+                                <td class="py-3 px-4 font-bold text-blue-900">0.0262</td>
+                                <td class="py-3 px-4 font-bold text-emerald-700">0.0607 s</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TABLE: VOLUMETRIC ATTACKS -->
+            <div class="mt-8 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 sm:p-8">
+                <h4 class="text-lg font-bold text-slate-900 mb-4 flex items-center">
+                    <span class="w-3 h-3 rounded-full bg-teal-600 mr-2"></span>
+                    Volumetric Surge Attack Benchmarks (Mitigating Maximum Forgetting)
+                </h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-600">
+                        <thead class="bg-slate-50 text-slate-900 uppercase text-xs font-bold border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4">Attack Scenario</th>
+                                <th class="py-3 px-4">Strategy</th>
+                                <th class="py-3 px-4">Buffer Size</th>
+                                <th class="py-3 px-4">Storage Saved</th>
+                                <th class="py-3 px-4">New F1</th>
+                                <th class="py-3 px-4">Known F1</th>
+                                <th class="py-3 px-4">Worst Forgetting (\(\mathcal{F}_{\max}\))</th>
+                                <th class="py-3 px-4">Improvement</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 font-medium">
+                            <!-- RANSOMWARE -->
+                            <tr class="hover:bg-slate-50">
+                                <td rowspan="2" class="py-3 px-4 font-bold text-slate-900 border-r border-slate-100">Ransomware (\(M=2{,}853\))</td>
+                                <td class="py-2 px-4">Static (\(k=100\))</td>
+                                <td class="py-2 px-4">900</td>
+                                <td class="py-2 px-4">99.24%</td>
+                                <td class="py-2 px-4">0.9997</td>
+                                <td class="py-2 px-4">0.9056</td>
+                                <td class="py-2 px-4 text-red-600 font-bold">0.3245</td>
+                                <td class="py-2 px-4 text-slate-400">Baseline</td>
+                            </tr>
+                            <tr class="bg-blue-50/40 hover:bg-blue-50">
+                                <td class="py-2 px-4 font-bold text-blue-900">Dynamic Replay</td>
+                                <td class="py-2 px-4 font-bold">2,853</td>
+                                <td class="py-2 px-4 font-bold">97.59%</td>
+                                <td class="py-2 px-4 font-bold text-blue-700">0.9997</td>
+                                <td class="py-2 px-4 font-bold">0.9227</td>
+                                <td class="py-2 px-4 font-bold text-emerald-700">0.2555</td>
+                                <td class="py-2 px-4 font-bold text-emerald-700">-21.3%</td>
+                            </tr>
+
+                            <!-- XSS -->
+                            <tr class="hover:bg-slate-50">
+                                <td rowspan="2" class="py-3 px-4 font-bold text-slate-900 border-r border-slate-100">XSS (\(M=2{,}903\))</td>
+                                <td class="py-2 px-4">Static (\(k=100\))</td>
+                                <td class="py-2 px-4">900</td>
+                                <td class="py-2 px-4">99.24%</td>
+                                <td class="py-2 px-4">0.9988</td>
+                                <td class="py-2 px-4">0.8979</td>
+                                <td class="py-2 px-4 text-red-600 font-bold">0.3972</td>
+                                <td class="py-2 px-4 text-slate-400">Baseline</td>
+                            </tr>
+                            <tr class="bg-blue-50/40 hover:bg-blue-50">
+                                <td class="py-2 px-4 font-bold text-blue-900">Dynamic Replay</td>
+                                <td class="py-2 px-4 font-bold">2,898</td>
+                                <td class="py-2 px-4 font-bold">97.55%</td>
+                                <td class="py-2 px-4 font-bold text-blue-700">0.9978</td>
+                                <td class="py-2 px-4 font-bold">0.9263</td>
+                                <td class="py-2 px-4 font-bold text-emerald-700">0.2548</td>
+                                <td class="py-2 px-4 font-bold text-emerald-700">-35.9%</td>
+                            </tr>
+
+                            <!-- BACKDOOR -->
+                            <tr class="hover:bg-slate-50">
+                                <td rowspan="2" class="py-3 px-4 font-bold text-slate-900 border-r border-slate-100">Backdoor (\(M=3{,}742\))</td>
+                                <td class="py-2 px-4">Static (\(k=100\))</td>
+                                <td class="py-2 px-4">900</td>
+                                <td class="py-2 px-4">99.22%</td>
+                                <td class="py-2 px-4">0.9999</td>
+                                <td class="py-2 px-4">0.9109</td>
+                                <td class="py-2 px-4 text-red-600 font-bold">0.2785</td>
+                                <td class="py-2 px-4 text-slate-400">Baseline</td>
+                            </tr>
+                            <tr class="bg-blue-50/40 hover:bg-blue-50">
+                                <td class="py-2 px-4 font-bold text-blue-900">Dynamic Replay</td>
+                                <td class="py-2 px-4 font-bold">3,735</td>
+                                <td class="py-2 px-4 font-bold">96.76%</td>
+                                <td class="py-2 px-4 font-bold text-blue-700">0.9999</td>
+                                <td class="py-2 px-4 font-bold">0.9234</td>
+                                <td class="py-2 px-4 font-bold text-emerald-700">0.2228</td>
+                                <td class="py-2 px-4 font-bold text-emerald-700">-20.0%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PUBLICATION FIGURE GALLERY -->
+    <section id="gallery" class="py-16 bg-white border-b border-slate-200">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto">
+                <h2 class="text-xs font-bold text-blue-700 tracking-widest uppercase">Visual Artifacts</h2>
+                <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">Publication-Quality Figures</h3>
+                <p class="text-slate-600 text-sm mt-3">High-resolution 300-DPI charts generated from empirical evaluation logs.</p>
+            </div>
+
+            <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <img src="images/fig_executive_dashboard.png" alt="Master Executive Dashboard" class="w-full h-auto rounded-xl shadow">
+                    <div class="mt-3 text-xs font-semibold text-slate-700 text-center">Fig. 1: Master Multi-Metric Executive Dashboard</div>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <img src="images/fig_radar_viability.png" alt="IoT Edge Viability Radar" class="w-full h-auto rounded-xl shadow">
+                    <div class="mt-3 text-xs font-semibold text-slate-700 text-center">Fig. 2: Composite IoT Edge Viability Radar Chart</div>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <img src="images/fig_forgetting_suppression.png" alt="Catastrophic Forgetting Suppression" class="w-full h-auto rounded-xl shadow">
+                    <div class="mt-3 text-xs font-semibold text-slate-700 text-center">Fig. 3: Volumetric Catastrophic Forgetting Suppression</div>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <img src="images/fig_plasticity_vs_stability.png" alt="Plasticity vs Stability" class="w-full h-auto rounded-xl shadow">
+                    <div class="mt-3 text-xs font-semibold text-slate-700 text-center">Fig. 4: Plasticity vs. Stability Trade-off Resolution</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- TEAM & CITATION -->
+    <section id="team" class="py-16 bg-slate-50 border-b border-slate-200">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <h2 class="text-xs font-bold text-blue-700 tracking-widest uppercase">Project Supervision & Authors</h2>
+                <h3 class="text-2xl font-extrabold text-slate-900 mt-2">Academic Team</h3>
+            </div>
+
+            <div class="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-lg">CS</div>
+                        <div>
+                            <h4 class="font-bold text-slate-900">Chitchula Sai Bhuvan</h4>
+                            <p class="text-xs text-slate-500">M.Tech Scholar (Cyber Security)</p>
+                            <p class="text-xs text-blue-600 mt-1">cb.sc.p2cse25007@cb.students.amrita.edu</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-lg">PR</div>
+                        <div>
+                            <h4 class="font-bold text-slate-900">Dr. Panduranga Ravi Teja</h4>
+                            <p class="text-xs text-slate-500">Assistant Professor & Research Guide</p>
+                            <p class="text-xs text-teal-600 mt-1">p_raviteja@cb.amrita.edu</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BIBTEX CITATION -->
+            <div class="mt-10 bg-slate-900 text-white p-6 rounded-2xl shadow-lg border border-slate-800">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs font-mono text-slate-400">BibTeX Citation</span>
+                    <button onclick="copyBibtex()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-md transition flex items-center space-x-1">
+                        <i class="fa-regular fa-copy"></i>
+                        <span id="copyBtnText">Copy</span>
+                    </button>
+                </div>
+                <pre id="bibtexCode" class="text-xs font-mono text-slate-300 overflow-x-auto p-2 leading-relaxed">@inproceedings{bhuvan2026adaptivenids,
+  title={{Adaptive and Resource-Efficient Network Intrusion Detection for Previously Unseen Attacks in IoT Networks}},
+  author={Chitchula Sai Bhuvan and Panduranga Ravi Teja},
+  booktitle={IEEE Conference on Communications and Network Security / IoT},
+  pages={1--6},
+  year={2026},
+  organization={IEEE}
+}</pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="bg-white py-8 border-t border-slate-200 text-center text-xs text-slate-500">
+        <div class="max-w-6xl mx-auto px-4">
+            <p>© 2026 Chitchula Sai Bhuvan & Dr. Panduranga Ravi Teja. All rights reserved.</p>
+            <p class="mt-1">Department of Computer Science and Engineering, Amrita School of Computing, Amrita Vishwa Vidyapeetham, Coimbatore, India.</p>
+            <p class="mt-2 text-slate-400">Open-Source Research Artifacts released under MIT License.</p>
+        </div>
+    </footer>
+
+    <!-- SCRIPT FOR CALCULATOR -->
+    <script>
+        const inputM = document.getElementById('novelVolume');
+        const inputK = document.getElementById('knownClasses');
+        const resQuota = document.getElementById('resQuota');
+        const resTotal = document.getElementById('resTotalBuffer');
+        const resSavings = document.getElementById('resSavings');
+        const resMemory = document.getElementById('resMemory');
+
+        function updateCalc() {
+            const M = parseInt(inputM.value) || 0;
+            const K = parseInt(inputK.value) || 9;
+            const kMin = 100;
+            const kMax = 555;
+            const N_hist = 118400; // Average historical corpus
+
+            let quota = Math.floor(M / K);
+            quota = Math.max(kMin, Math.min(kMax, quota));
+            const totalBuffer = quota * K;
+            const savings = ((1 - (totalBuffer / N_hist)) * 100).toFixed(2);
+            const memoryKB = ((totalBuffer * 41 * 4) / 1024).toFixed(1); // 41 float features * 4 bytes
+
+            resQuota.textContent = quota.toLocaleString();
+            resTotal.textContent = totalBuffer.toLocaleString();
+            resSavings.textContent = savings + '%';
+            resMemory.textContent = memoryKB + ' KB';
+        }
+
+        function setVolume(val) {
+            inputM.value = val;
+            updateCalc();
+        }
+
+        inputM.addEventListener('input', updateCalc);
+        inputK.addEventListener('input', updateCalc);
+        updateCalc();
+
+        function copyBibtex() {
+            const text = document.getElementById('bibtexCode').innerText;
+            navigator.clipboard.writeText(text);
+            const btn = document.getElementById('copyBtnText');
+            btn.innerText = 'Copied!';
+            setTimeout(() => { btn.innerText = 'Copy'; }, 2000);
+        }
+    </script>
+</body>
+</html>

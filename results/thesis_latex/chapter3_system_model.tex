@@ -1,86 +1,201 @@
 \chapter{System Model and Problem Formulation}
 \label{chap:system_model}
 
-\section{Edge IoT Network Architecture and Threat Model}
-\subsection{Deployment Topology}
-The target deployment environment considered in this thesis corresponds to a distributed Edge IoT architecture, commonly encountered in smart manufacturing, healthcare monitoring, and intelligent municipal infrastructure. The network architecture consists of three hierarchical layers:
+Chapter~\ref{chap:literature_review} established that a deployed intrusion detector must be able to learn new attacks without losing what it already knows, and that the size of the incoming attack batch matters a great deal when replay is used. Before the proposed framework can be described, the setting in which it operates has to be pinned down. This chapter describes the edge deployment that the work assumes, the kinds of adversaries the detector is expected to face, and the dataset and evaluation protocol used throughout the thesis. It then states the learning problem formally and explains, in terms of how decision trees choose their splits, why both naive retraining and fixed-size replay lose accuracy on previously learned classes.
+
+\section{Deployment Setting}
+\label{sec:deployment}
+
+The work targets the kind of layered IoT network found in smart buildings, small manufacturing lines and remote monitoring sites. Three layers are distinguished.
+
+\subsection{Device, Edge and Management Layers}
+\label{subsec:layers}
+
+At the bottom sit the end devices: environmental sensors, cameras, smart meters and programmable controllers. They report readings over lightweight protocols such as MQTT, CoAP or Modbus/TCP and have almost no spare memory or processing capacity for security software. Above them is the edge layer, made up of gateways and access routers that aggregate device traffic before it leaves the site. This is where the intrusion detector runs, since every flow from the device layer passes through it. At the top is a management layer, typically a security operations team with access to threat intelligence feeds, which investigates alerts and confirms whether suspicious traffic is in fact a new attack.
+
+The practical consequence of this arrangement is that detection and model updates must both happen on the gateway. Shipping all traffic to a central server for inspection is often ruled out by bandwidth, latency or data-protection requirements, and the gateway itself has a fixed, modest memory budget. Any update procedure therefore has to be cheap in two senses: it must store little historical data, and it must retrain quickly.
+
+\subsection{Assumptions on the Gateway and the Analyst}
+\label{subsec:assumptions}
+
+The following assumptions are made throughout the thesis:
 \begin{enumerate}
-    \item \textbf{Perception and Sensor Layer:} Microcontroller-driven smart endpoints (e.g., environmental monitors, medical telemetry sensors, industrial PLCs) that continuously capture physical observations and transmit digitized telemetry using lightweight application protocols (e.g., MQTT, CoAP, Modbus).
-    \item \textbf{Edge Computing Layer:} Intermediate network aggregation hardware, such as edge gateways, industrial access routers, and smart border hubs. These devices aggregate heterogeneous sensor streams, perform preliminary data filtering, and host the real-time Network Intrusion Detection System (NIDS).
-    \item \textbf{Centralized Management / Cloud Layer:} Upstream enterprise security operations centers (SOC) that manage long-term threat intelligence, security policy updates, and human-in-the-loop incident auditing.
+    \item The gateway itself is trusted. The attacker can generate or alter traffic but cannot tamper with the detector's code, its stored replay buffer or its training procedure. Poisoning of the replay memory is outside the scope of this work.
+    \item Traffic is summarised into flow records before classification, so the detector sees per-connection statistics rather than raw packet payloads.
+    \item When the anomaly screener raises an alert, an analyst (or an upstream intelligence feed) can confirm the alert and supply a modest batch of labelled flows belonging to the new attack. The framework decides how to learn from that batch; it does not attempt to label traffic on its own.
 \end{enumerate}
 
-\subsection{Threat Model and Adversarial Capabilities}
-Adversaries targeting edge IoT networks exhibit diverse technical objectives and traffic generation profiles:
-\begin{itemize}
-    \item \textbf{Stealthy / Low-Volume Adversaries (e.g., MITM):} Malicious actors that deploy ARP spoofing or DNS poisoning to silently intercept, inspect, or tamper with sensory payloads without disrupting network connectivity. These attacks generate minimal anomalous traffic volume ($\sim$100--200 packets), deliberately evading rate-limiting volumetric defenses.
-    \item \textbf{Exploitative / Persistent Adversaries (e.g., Ransomware, Password Brute-Force):} Adversaries seeking to compromise edge device credentials or encrypt local filesystems, generating sustained bursts of credential-guessing or SMB/RPC packet flows ($\sim$1,000--3,000 packets).
-    \item \textbf{Volumetric / Aggressive Adversaries (e.g., XSS, Backdoor, DDoS):} High-volume compromise campaigns involving automated vulnerability scanning, injection attacks, and reverse shell beacons. These attacks generate thousands of network flows ($\sim$3,000--4,000 packets), presenting sudden bursts of novel traffic.
-\end{itemize}
+\section{Threat Model}
+\label{sec:threat_model}
 
-\section{Mathematical Formulation of the NIDS Problem}
-Let raw network traffic be represented as a continuous, time-ordered sequence of packet flows $\mathcal{S} = \{\mathbf{f}_1, \mathbf{f}_2, \dots, \mathbf{f}_t, \dots\}$. Each flow $\mathbf{f}_t$ is summarized by a feature extraction preprocessor into a real-valued feature vector $\mathbf{x}_t \in \mathcal{X} \subset \mathbb{R}^d$, where $d$ denotes the feature dimensionality (including statistical flow metrics such as duration, packet counts, inter-arrival times, TCP flags, and protocol indicators).
+Attacks on IoT networks differ widely in how much traffic they produce, and this turns out to be the property that matters most for model updates. Three broad profiles are considered.
 
-\subsection{Closed-World Supervised Formulation}
-Under the standard closed-world formulation, the intrusion detection model is trained offline on a static historical dataset:
+\subsubsection{Low-volume, stealthy attacks}
+A Man-in-the-Middle (MITM) attacker who poisons ARP or DNS tables wants to sit quietly between a device and its broker, reading or altering messages without disrupting service. Such an attack produces relatively few distinctive flows. In the TON\_IoT network data, MITM accounts for only 1{,}043 of 211{,}043 records, under 0.5\% of the total, and the labelled batch available for adaptation in our experiments contained just 207 flows.
+
+\subsubsection{Persistent, medium-volume attacks}
+Ransomware campaigns and credential attacks aim to gain a foothold on a device and then encrypt or exfiltrate data. They tend to generate sustained activity over a longer period. The ransomware adaptation batch used in this work contained 2{,}853 flows.
+
+\subsubsection{High-volume, aggressive attacks}
+Injection-style attacks such as Cross-Site Scripting (XSS), and backdoor activity involving repeated beaconing to a command server, produce large numbers of flows in a short time. The XSS and backdoor adaptation batches contained 2{,}903 and 3{,}742 flows respectively.
+
+The detector has no way of knowing in advance which of these profiles the next unseen attack will follow. An update procedure that works well for a 207-flow MITM batch but fails for a 3{,}742-flow backdoor batch is not usable in practice, and this requirement shapes the design in Chapter~\ref{chap:proposed_framework}.
+
+\section{Dataset and Evaluation Protocol}
+\label{sec:dataset_protocol}
+
+\subsection{The TON\_IoT Network Dataset}
+\label{subsec:toniot}
+
+All experiments use the network portion of the TON\_IoT dataset~\cite{alshammari2020toniot}, collected on a testbed that combines physical IoT devices, virtual machines and cloud services. The version used here contains 211{,}043 flow records described by 44 columns, covering normal traffic and nine attack types. The class distribution is given in Table~\ref{tab:class_distribution}. Apart from the normal class and the very small MITM class, each attack type contributes 20{,}000 records.
+
+\begin{table}[htpb]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\caption{Class distribution of the TON\_IoT network records used in this work}
+\label{tab:class_distribution}
+\begin{tabular}{|l|r|r|}
+\hline
+\textbf{Traffic class} & \textbf{Records} & \textbf{Share (\%)} \\ \hline
+Normal      & 50{,}000 & 23.69 \\
+Backdoor    & 20{,}000 & 9.48 \\
+DDoS        & 20{,}000 & 9.48 \\
+DoS         & 20{,}000 & 9.48 \\
+Injection   & 20{,}000 & 9.48 \\
+Password    & 20{,}000 & 9.48 \\
+Ransomware  & 20{,}000 & 9.48 \\
+Scanning    & 20{,}000 & 9.48 \\
+XSS         & 20{,}000 & 9.48 \\
+MITM        & 1{,}043  & 0.49 \\ \hline
+\textbf{Total} & \textbf{211{,}043} & \textbf{100.00} \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Preprocessing}
+\label{subsec:preprocessing}
+
+The raw records were cleaned in a fixed order, with every statistic estimated on the training partition only so that no information from the test data leaked into the model:
+\begin{enumerate}
+    \item Placeholder values (``-'') were treated as missing, and 20{,}569 exact duplicate rows were removed.
+    \item Source and destination IP addresses were dropped. Keeping them would let the model memorise which testbed hosts were attackers rather than learn how attack traffic behaves.
+    \item Columns with more than half of their training values missing were discarded. Remaining gaps were filled with the training median for numeric features and the training mode for categorical ones.
+    \item Categorical fields such as protocol and connection state were one-hot encoded, with categories unseen during training mapped to an all-zero vector.
+\end{enumerate}
+
+\subsection{Leave-One-Attack-Out Protocol}
+\label{subsec:loao}
+
+To imitate the arrival of a genuinely new attack, one attack class at a time is removed from the data before training. Four classes were held out in turn: MITM, ransomware, XSS and backdoor, chosen to span the three volume profiles in Section~\ref{sec:threat_model}. For each run:
+\begin{enumerate}
+    \item The remaining $K = 9$ known classes are split 70/30 into training and test sets, stratified by class. The training set forms the historical data $\mathcal{D}_{\text{train}}$; for the MITM run it holds 127{,}787 flows.
+    \item The held-out class is split 20/80. The smaller part plays the role of the labelled batch $\mathcal{D}_{\text{new}}$ handed over by the analyst, and the larger part is kept untouched for evaluating how well the new attack has been learned.
+    \item The label encoder is fitted on the known classes only, and the code checks explicitly that the held-out class is absent from it, so the baseline model genuinely cannot predict that label.
+\end{enumerate}
+Table~\ref{tab:loao_splits} lists the resulting batch sizes.
+
+\begin{table}[htpb]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\caption{Adaptation and evaluation sizes for each held-out attack}
+\label{tab:loao_splits}
+\begin{tabular}{|l|l|r|r|}
+\hline
+\textbf{Held-out attack} & \textbf{Volume profile} & \textbf{Adaptation flows ($M$)} & \textbf{Evaluation flows} \\ \hline
+MITM       & Low    & 207      & 832 \\
+Ransomware & Medium & 2{,}853  & 11{,}413 \\
+XSS        & High   & 2{,}903  & 11{,}616 \\
+Backdoor   & High   & 3{,}742  & 14{,}968 \\ \hline
+\end{tabular}
+\end{table}
+
+\section{Problem Formulation}
+\label{sec:formulation}
+
+\subsection{Closed-World Classification}
+\label{subsec:closed_world_formulation}
+
+Each flow is mapped by the preprocessing pipeline to a feature vector $\mathbf{x} \in \mathbb{R}^d$. The historical training set is
 \begin{equation}
-\mathcal{D}_{train} = \{(\mathbf{x}_i, y_i)\}_{i=1}^{N}, \quad \mathbf{x}_i \in \mathcal{X}, \quad y_i \in \mathcal{C}_{known}
+\mathcal{D}_{\text{train}} = \{(\mathbf{x}_i, y_i)\}_{i=1}^{N}, \qquad y_i \in \mathcal{C} = \{1, \dots, K\},
 \end{equation}
-where $\mathcal{C}_{known} = \{1, 2, \dots, K\}$ denotes the set of $K$ known attack classes (e.g., Benign, DDoS, Scanning, Password, etc.). 
-
-A supervised multi-class classifier $f_{\theta}: \mathcal{X} \rightarrow \mathcal{C}_{known}$ is trained by minimizing the empirical risk over $\mathcal{D}_{train}$:
+and a classifier $f_\theta : \mathbb{R}^d \rightarrow \mathcal{C}$ is fitted to it. For a Random Forest~\cite{breiman2001random} the output is the class with the largest averaged vote,
 \begin{equation}
-\theta^* = \arg\min_{\theta} \frac{1}{N} \sum_{i=1}^{N} \mathcal{L}(f_{\theta}(\mathbf{x}_i), y_i)
+f_\theta(\mathbf{x}) = \arg\max_{k \in \mathcal{C}} \; \frac{1}{B} \sum_{b=1}^{B} P_b(y = k \mid \mathbf{x}),
 \end{equation}
-where $\mathcal{L}$ denotes the multi-class loss function (such as Gini impurity minimization in Random Forests or cross-entropy loss).
+where $P_b$ is the class distribution stored in the leaf of tree $b$ that $\mathbf{x}$ reaches. Because these distributions are defined over $\mathcal{C}$ alone, they always sum to one over the known classes.
 
-\subsection{Open-World Zero-Day Vulnerability}
-In an operational deployment, network flows are drawn from an open-world distribution:
+\subsection{Arrival of an Unseen Class}
+\label{subsec:open_world_formulation}
+
+After deployment, traffic is drawn from a mixture of the familiar distribution and that of a new attack $y^\ast = K+1 \notin \mathcal{C}$:
 \begin{equation}
-\mathcal{P}_{open}(\mathbf{x}, y) = (1 - \pi) \mathcal{P}_{known}(\mathbf{x}, y) + \pi \mathcal{P}_{novel}(\mathbf{x}, y)
+P_{\text{deploy}}(\mathbf{x}, y) = (1 - \pi)\, P_{\text{known}}(\mathbf{x}, y) + \pi\, P_{\text{new}}(\mathbf{x}, y), \qquad 0 \le \pi \le 1 .
 \end{equation}
-where $\pi \in [0, 1]$ represents the probability of encountering a novel, unobserved zero-day attack class $y^* \notin \mathcal{C}_{known}$.
+Since $f_\theta(\mathbf{x}) \in \mathcal{C}$ for every input, every flow of the new attack receives a wrong label, whatever the model's accuracy on known traffic. This is not a matter of the model being poorly trained; the correct answer is simply not among its options. The experiments in Chapter~\ref{chap:results_and_discussion} confirm this: the baseline scores an F1 of zero on each held-out attack.
 
-Because the decision space of the closed-world classifier $f_{\theta}$ is strictly bounded by $\mathcal{C}_{known}$, the probability simplex satisfies:
+\subsection{The Update Problem}
+\label{subsec:update_problem}
+
+Once the batch $\mathcal{D}_{\text{new}}$ of $M$ labelled flows is available, the gateway must produce an updated classifier $f_{\theta'} : \mathbb{R}^d \rightarrow \mathcal{C} \cup \{K+1\}$. It may not keep all of $\mathcal{D}_{\text{train}}$; instead it keeps a replay buffer $\mathcal{B} \subset \mathcal{D}_{\text{train}}$ and trains on $\mathcal{B} \cup \mathcal{D}_{\text{new}}$. Writing $F1_c^{\text{before}}$ and $F1_c^{\text{after}}$ for the F1 score of known class $c$ before and after the update, the per-class forgetting is
 \begin{equation}
-\sum_{k \in \mathcal{C}_{known}} P(y = k \mid \mathbf{x}) = 1.0, \quad \forall \mathbf{x} \in \mathcal{X}
+\Delta_c = F1_c^{\text{before}} - F1_c^{\text{after}},
 \end{equation}
-Consequently, when a novel packet $\mathbf{x}_{novel} \sim \mathcal{P}_{novel}$ enters the system:
+and the update should satisfy four requirements at once:
 \begin{equation}
-f_{\theta}(\mathbf{x}_{novel}) \in \mathcal{C}_{known} \implies \text{Error Guaranteed}
+\text{high } F1_{K+1}, \qquad \text{small } \frac{1}{K}\sum_{c \in \mathcal{C}} \max(0, \Delta_c), \qquad \text{small } \max_{c \in \mathcal{C}} \Delta_c, \qquad |\mathcal{B}| \le B_{\max},
 \end{equation}
-The closed-world classifier is mathematically incapable of identifying the attack as novel, forcing an immediate false-negative or misclassification error.
+together with a short retraining time. The worst-case term $\max_c \Delta_c$ is included deliberately. An average can look acceptable while one class, for instance normal traffic, collapses, and from an operator's point of view that single collapse is what matters.
 
-\section{The Mechanics of Catastrophic Forgetting in Decision Tree Ensembles}
-While catastrophic forgetting is typically analyzed within gradient-based neural networks (where weight updates overwrite historical orthogonal features), it is equally devastating in non-parametric tree ensembles such as Random Forests. 
+\section{Why Tree Ensembles Forget}
+\label{sec:why_forget}
 
-A Random Forest comprises an ensemble of $B$ independent decision trees $\{T_b\}_{b=1}^{B}$. For each tree, recursive binary splitting selects the feature $j$ and threshold $\tau$ that maximize the impurity reduction $\Delta I$:
+Catastrophic forgetting is usually discussed for neural networks, where new gradient updates overwrite old weights~\cite{kirkpatrick2017overcoming}. A Random Forest has no weights to overwrite, but it is retrained from scratch on whatever data it is given, and its splits are chosen entirely by that data. Forgetting therefore comes from the composition of the training set.
+
+\subsection{Split Selection by Impurity}
+\label{subsec:gini}
+
+Each tree grows by choosing, at every node $s$, the feature $j$ and threshold $\tau$ that most reduce impurity:
 \begin{equation}
-\Delta I(s, j, \tau) = I(s) - \frac{|s_L|}{|s|} I(s_L) - \frac{|s_R|}{|s|} I(s_R)
+\Delta I(s, j, \tau) = I(s) - \frac{|s_L|}{|s|} I(s_L) - \frac{|s_R|}{|s|} I(s_R), \qquad I(s) = 1 - \sum_{k} p_k^2 ,
 \end{equation}
-where $I(s)$ represents the Gini impurity of node $s$:
+where $p_k$ is the fraction of samples at $s$ belonging to class $k$, and $s_L$, $s_R$ are the two child nodes. Because the reduction is weighted by the number of samples each child receives, splits that tidy up the largest class yield the biggest gains and are chosen first. Classes that make up a small share of the training data get fewer, later and shallower splits.
+
+\subsection{Training on the New Attack Alone}
+\label{subsec:finetune_only}
+
+If the model is retrained only on $\mathcal{D}_{\text{new}}$, every sample belongs to class $K+1$, so $p_{K+1} = 1$ at the root and no split is ever needed. The resulting model has no structure for separating the original classes and predicts the new class for everything. This is the most extreme form of forgetting, and the experiments show known-class accuracy falling to zero under this strategy.
+
+\subsection{Imbalance under a Fixed Buffer}
+\label{subsec:imbalance_ratio}
+
+With a fixed quota of $k$ samples per known class, the buffer holds $Kk$ flows. A convenient measure of how strongly the new attack dominates the update is
 \begin{equation}
-I(s) = 1 - \sum_{k=1}^{K} p_k^2
+\rho = \frac{M}{K\,k}.
 \end{equation}
-and $p_k$ is the empirical fraction of class $k$ samples present at node $s$.
+With $K = 9$ and $k = 100$, the buffer contains 900 flows. Table~\ref{tab:rho} shows how $\rho$ varies across the four held-out attacks, alongside the worst-case forgetting measured with this buffer.
 
-\subsection{Why Fine-Tuning Only on New Attacks Destroys Legacy Boundaries}
-When an updated batch containing solely novel attack samples $\mathcal{D}_{novel}$ is presented to the model without historical context:
-\begin{equation}
-p_{novel} \rightarrow 1.0, \quad p_k \rightarrow 0 \quad (\forall k \in \mathcal{C}_{known})
-\end{equation}
-The tree construction algorithm optimizes feature splits solely to isolate the novel class from residual noise. All existing internal split nodes that previously partitioned historical classes (e.g., distinguishing DDoS from Benign traffic) are eradicated because historical classes have zero empirical presence in the optimization batch. Consequently, legacy accuracy drops catastrophically to zero.
+\begin{table}[htpb]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\caption{Imbalance ratio and worst-case forgetting with a fixed buffer of 100 flows per class}
+\label{tab:rho}
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Held-out attack} & \textbf{$M$} & \textbf{$\rho = M / 900$} & \textbf{Maximum forgetting} \\ \hline
+MITM       & 207     & 0.23 & 0.060 \\
+Ransomware & 2{,}853 & 3.17 & 0.324 \\
+XSS        & 2{,}903 & 3.23 & 0.397 \\
+Backdoor   & 3{,}742 & 4.16 & 0.279 \\ \hline
+\end{tabular}
+\end{table}
 
-\subsection{The Imbalance Vulnerability of Static Buffers}
-When a fixed static buffer $\mathcal{B}_{static}$ is utilized with a quota of $k_{static}$ samples per class, the total historical memory size is $|\mathcal{B}_{static}| = K \cdot k_{static}$. 
+When $\rho < 1$, as for MITM, the known classes together outweigh the new one, the early splits still separate them, and forgetting stays small. When $\rho$ exceeds three, the new class is the single largest group in the update set, and each known class is outnumbered roughly thirty to one. The early splits now mostly serve to isolate the new attack, and the boundaries between the older classes are pushed deeper into the trees or lost. Worst-case forgetting jumps from 0.06 to between 0.28 and 0.40.
 
-If a novel volumetric attack arrives with $M = |\mathcal{D}_{novel}|$ samples:
-\begin{equation}
-\text{Imbalance Ratio } \rho = \frac{M}{K \cdot k_{static}}
-\end{equation}
-\begin{itemize}
-    \item When $\rho \ll 1$ (e.g., MITM attack, $M \approx 180$, $K \cdot k_{static} = 900$, $\rho = 0.20$): The historical classes maintain dominant representation. The tree splits preserve historical boundaries, and forgetting remains negligible ($\mathcal{F}_{max} \approx 0.06$).
-    \item When $\rho \gg 1$ (e.g., XSS or Backdoor, $M \approx 3,500$, $K \cdot k_{static} = 900$, $\rho = 3.88$): The novel attack dominates the training set by nearly 4:1. During tree construction, the greedy split algorithm heavily favors splitting features that pure-classify the massive novel class, sacrificing historical boundary purity and causing severe catastrophic forgetting spikes ($\mathcal{F}_{max} \approx 0.40$).
-\end{itemize}
+The relationship is not strictly monotone: backdoor has the largest $\rho$ but lower worst-case forgetting than XSS. This is to be expected, since how much a known class suffers also depends on how far its traffic lies from the new attack in feature space. XSS flows evidently overlap more with some existing classes than backdoor flows do. Even so, the three large attacks all fall well above the MITM case, which is enough to show that a buffer size chosen for one attack cannot be relied on for another.
 
-This mathematical reality proves that fixed static buffers are fundamentally flawed for intrusion detection: the buffer must dynamically scale to neutralize the imbalance ratio $\rho \approx 1.0$.
+This observation leads directly to the central design idea of the thesis. If forgetting is driven largely by $\rho$, the buffer should be sized according to the incoming batch, keeping $\rho$ close to one, rather than fixed in advance. Doing so must still respect a hard memory ceiling $B_{\max}$, and must not shrink the buffer below a floor that guarantees each known class enough examples to keep its boundaries.
+
+To summarise, this chapter has set out the edge deployment and its assumptions, described three attack profiles that differ mainly in volume, and specified the TON\_IoT data and the leave-one-attack-out protocol used for evaluation. It has stated the update problem in terms of new-attack F1, average and worst-case forgetting, memory and retraining time, and has used the split-selection behaviour of decision trees to explain why a fixed replay buffer breaks down when a large attack arrives. Chapter~\ref{chap:proposed_framework} builds on this analysis to present the two-stage framework and the volume-aware Dynamic Replay rule.

@@ -1,48 +1,180 @@
-\chapter{Conclusion and Future Research Directions}
+\chapter{CONCLUSION AND FUTURE ENHANCEMENTS}
 \label{chap:conclusion}
 
-\section{Summary of Research Findings}
-As Internet of Things (IoT) ecosystems become the backbone of critical infrastructure, industrial automation, and smart urban environments, the vulnerability of static machine learning security models to emerging zero-day threats poses an existential risk. This thesis investigated the fundamental limitations of closed-world supervised Network Intrusion Detection Systems (NIDS) and formulated an autonomous, resource-efficient Continual Learning framework tailored for edge IoT environments.
+This thesis addressed a fundamental operational bottleneck in contemporary Internet of Things (IoT) cybersecurity: machine learning based Network Intrusion Detection Systems (NIDS) deployed on resource-constrained edge gateways are invariably trained under a static, closed-world assumption. While conventional detectors achieve near-perfect classification on familiar network traffic, they fail catastrophically when confronted with previously unobserved attack variants and zero-day exploits. On memory-constrained edge hardware, conventional remedies break down: periodic full retraining on historical data archives exhausts on-device memory and causes prohibitive retraining delays, whereas naive incremental updates induce severe catastrophic forgetting of earlier threat signatures.
 
-Through systematic empirical benchmarking on the real-world TON\_IoT intrusion dataset, this research yielded several seminal findings:
+To resolve this challenge, this research designed, implemented, and empirically validated a resource-efficient, two-stage continual intrusion detection framework. By decoupling passive traffic inspection from on-demand supervised retraining, the framework harnesses an unsupervised Isolation Forest novelty screener to flag suspicious deviations in unlabelled traffic streams, prompting an analyst verification step that triggers Stage~2 continual adaptation. At the core of the adaptation engine lies the volume-aware Dynamic Replay rule, which analytically couples the historical exemplar retention quota to the incoming attack volume within strict hardware-enforced memory bounds ($< 1\text{ MB}$).
+
+This chapter synthesizes the overarching empirical findings, articulates the core technical insights governing continual learning on tree ensembles, documents the rigorous verification procedures ensuring experimental validity, provides actionable deployment guidelines for edge practitioners, and outlines promising future research avenues.
+
+\section{Synthesis of Empirical Findings and Technical Inferences}
+\label{sec:interpretation}
+
+To present a consolidated synthesis of the research journey, Table~\ref{tab:consolidated_outcomes} summarizes the six core empirical investigations conducted on the TON\_IoT benchmark ($183{,}592$ clean, deduplicated flows across $41$ attributes), contrasting the primary scientific question against the observed outcome and operational interpretation. Figure~\ref{fig:conclusion_strategy_summary} contrasts the worst-case per-class forgetting ($\mathcal{F}_{\max}$) across Full Historical Retraining, Static Class-Balanced Replay, and the proposed Dynamic Volume Replay on the three volumetric attack scenarios.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Consolidated outcome of the experimental investigations across the thesis}
+\label{tab:consolidated_outcomes}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|p{3.2cm}|p{4.2cm}|p{4.0cm}|p{4.2cm}|}
+\hline
+\textbf{Investigation} & \textbf{Scientific Question} & \textbf{Empirical Finding} & \textbf{Operational Interpretation} \\ \hline
+\textbf{Closed-World Baseline} & How does a high-accuracy static detector perform on unobserved attacks? & Known accuracy $99.02\%$; unseen MITM F1 is strictly $0.0000$ & High headline accuracy masks complete, silent zero-day vulnerability. \\ \hline
+\textbf{Unsupervised Screening} & Can an unlabelled screener trigger adaptation without prior attack knowledge? & Flags $18.86\%$ of unseen MITM vs.\ $2.70\%$ of known attacks & Sevenfold novelty enrichment serves as an effective operational adaptation trigger. \\ \hline
+\textbf{Rare Attack Adaptation} & Which continual update strategy best handles rare zero-day threats? & Replay ($k=100$) achieves F1 $0.9773$; Full Retraining achieves $0.6483$ & Class-balanced exemplar replay eliminates Gini minority dilution on rare attacks. \\ \hline
+\textbf{Buffer Sensitivity Sweep} & What is the minimal historical memory budget required to curb forgetting? & $k=25 \to 100$ cuts $\mathcal{F}_{\text{avg}}$ by $58.7\%$ and $\mathcal{F}_{\max}$ by $52.3\%$ & Empirical Pareto knee identified at $k_{\min} = 100$ exemplars per class ($172.8\text{ KB}$). \\ \hline
+\textbf{Volumetric Imbalance} & Does a fixed replay buffer remain robust under high-volume attack floods? & Static buffer $\mathcal{F}_{\max}$ surges to $0.3972$ when ratio $\rho > 3.0$ & Static quotas suffer severe forgetting when heavily outvoted by incoming volume. \\ \hline
+\textbf{Volume-Aware Dynamic Replay} & Does dynamically scaling historical buffer quotas mitigate catastrophic forgetting? & Cuts $\mathcal{F}_{\max}$ by $20.0\text{--}35.9\%$ and $\mathcal{F}_{\text{avg}}$ by $24.4\text{--}40.2\%$ & Volume-proportional replay protects vulnerable minority classes while saving $>96.7\%$ memory. \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    \draw[-latex', line width=0.75pt] (0,0) -- (11.4,0);
+    \draw[-latex', line width=0.75pt] (0,0) -- (0,4.8);
+    \node[rotate=90] at (-1.2,2.2) {\footnotesize Maximum forgetting $\mathcal{F}_{\max}$};
+    \draw (0,0) -- (-0.12,0) node[left] {\scriptsize 0.00};
+    \draw (0,1) -- (-0.12,1) node[left] {\scriptsize 0.10};
+    \draw (0,2) -- (-0.12,2) node[left] {\scriptsize 0.20};
+    \draw (0,3) -- (-0.12,3) node[left] {\scriptsize 0.30};
+    \draw (0,4) -- (-0.12,4) node[left] {\scriptsize 0.40};
+    % Ransomware: full 0.0132, static 0.3245, dynamic 0.2555
+    \draw[fill=gray!15] (0.6,0) rectangle (1.3,0.132); \node[above] at (0.95,0.14) {\tiny .013};
+    \draw[fill=gray!45] (1.35,0) rectangle (2.05,3.245); \node[above] at (1.70,3.25) {\tiny .325};
+    \draw[fill=gray!80] (2.10,0) rectangle (2.80,2.555); \node[above] at (2.45,2.56) {\tiny .256};
+    \node[below] at (1.70,-0.1) {\footnotesize Ransomware};
+    % XSS: full 0.0152, static 0.3972, dynamic 0.2548
+    \draw[fill=gray!15] (4.2,0) rectangle (4.9,0.152); \node[above] at (4.55,0.16) {\tiny .015};
+    \draw[fill=gray!45] (4.95,0) rectangle (5.65,3.972); \node[above] at (5.30,3.98) {\tiny .397};
+    \draw[fill=gray!80] (5.70,0) rectangle (6.40,2.548); \node[above] at (6.05,2.55) {\tiny .255};
+    \node[below] at (5.30,-0.1) {\footnotesize XSS};
+    % Backdoor: full 0.0001, static 0.2785, dynamic 0.2228
+    \draw[fill=gray!15] (7.8,0) rectangle (8.5,0.02); \node[above] at (8.15,0.03) {\tiny .000};
+    \draw[fill=gray!45] (8.55,0) rectangle (9.25,2.785); \node[above] at (8.90,2.79) {\tiny .279};
+    \draw[fill=gray!80] (9.30,0) rectangle (10.0,2.228); \node[above] at (9.65,2.23) {\tiny .223};
+    \node[below] at (8.90,-0.1) {\footnotesize Backdoor};
+    % Legend
+    \draw[fill=gray!15] (0.6,4.35) rectangle (1.0,4.6); \node[right] at (1.1,4.47) {\scriptsize Full retraining ($>115$k flows)};
+    \draw[fill=gray!45] (5.0,4.35) rectangle (5.4,4.6); \node[right] at (5.5,4.47) {\scriptsize Static ($900$ flows)};
+    \draw[fill=gray!80] (7.6,4.35) rectangle (8.0,4.6); \node[right] at (8.1,4.47) {\scriptsize Dynamic ($2{,}853\text{--}3{,}735$ flows)};
+  \end{tikzpicture}
+  \caption{Worst-case per-class forgetting ($\mathcal{F}_{\max}$) across the three update strategies on the volumetric attack scenarios}
+  \label{fig:conclusion_strategy_summary}
+\end{figure}
+
+The empirical findings yield five fundamental technical insights:
+
+\subsection{Why Headline Accuracy Deceives in Edge Intrusion Detection}
+On the known-class evaluation partition, the baseline Random Forest achieved an outstanding $99.02\%$ accuracy and $0.9890$ Macro-F1. When evaluated on the mixed test stream containing unseen zero-day MITM attacks, overall headline accuracy remained seemingly exceptional at $97.17\%$. However, this aggregate metric masked complete structural failure: the detector correctly identified zero MITM flows ($F1 = 0.0000$). Because MITM traffic represented less than $2\%$ of the total evaluation stream, missing every single zero-day intrusion lowered aggregate accuracy by only $1.85\%$. In mission-critical edge deployments, reporting aggregate accuracy on closed-world benchmarks creates a perilous false sense of security. Class-wise F1 and unweighted Macro-F1 must serve as the primary evaluation criteria.
+
+\subsection{The Dual Operational Hazard of Misclassification}
+Analysis of the $10 \times 10$ confusion matrix demonstrated that an unobserved attack causes collateral operational damage beyond simple evasion. In our experiments, $29.26\%$ of unseen MITM flows were misrouted to \texttt{normal}, allowing malicious traffic to penetrate the IoT subnet completely unhindered. Simultaneously, $39.85\%$ of MITM flows were misclassified as \texttt{dos}, contaminating security alerts, causing human operator fatigue, and degrading DoS precision from $0.989$ to $0.903$ ($F1$ drop from $0.9855$ to $0.9411$). Consequently, unobserved threats actively undermine trust in the detection of familiar classes.
+
+\subsection{Unsupervised Anomaly Screening as an Edge Adaptation Trigger}
+The unsupervised Isolation Forest achieved an $18.86\%$ novelty recall on unobserved MITM flows, while flagging only $2.70\%$ of familiar attacks and $6.92\%$ of normal flows. This represents a sevenfold enrichment in anomaly concentration. While an $18.86\%$ recall is insufficient for an autonomous standalone blocking system, it provides an ideal operational trigger for continual adaptation: capturing nearly $200$ anomalous exemplars into a quarantine buffer is more than sufficient for security analysts to construct a verified adaptation batch, initiating Stage~2 without continuous on-device retraining overhead.
+
+\subsection{Why Class-Balanced Replay Outperforms Full Archive Retraining}
+Under extreme data scarcity ($M = 207$ MITM flows), naive full historical retraining yielded a disappointing $F1_{\text{new}}$ of $0.6483$ with an unacceptably low recall of $47.96\%$. This empirical failure is directly explained by CART decision tree mechanics. In Gini impurity optimization:
+\begin{equation}
+\Delta I(s) = I(s) - \frac{|s_L|}{|s|}I(s_L) - \frac{|s_R|}{|s|}I(s_R),
+\end{equation}
+candidate splits are weighted by node sample proportions. When $207$ novel flows are submerged inside an archive of $127{,}787$ historical samples (a minuscule $0.16\%$ presence), splits separating the rare threat provide negligible global impurity reduction near the root, causing trees to subsume the novel class into majority classes. Conversely, class-balanced replay ($k = 100$ exemplars per class) equalizes effective priors ($100$ per old class vs.\ $207$ for the new class), raising MITM recall to $95.55\%$ ($F1 = 0.9773$, a $+0.3290$ gain) while slashing storage by $99.30\%$ and accelerating training by $11.6\times$.
+
+\subsection{Mitigating Volumetric Surge Forgetting via Dynamic Replay}
+While a static quota of $k = 100$ excels on rare attacks, it exhibits severe vulnerability under volumetric attack surges. When an incoming attack arrives with thousands of flows (e.g., $M = 2{,}903$ for XSS), the static new-to-buffer imbalance ratio surges to $\rho = 3.23$, causing maximum forgetting $\mathcal{F}_{\max}$ to jump to $0.3972$. Crucially, per-class case studies revealed that the worst-case degradation invariably strikes the smallest historical class (MITM, dropping from $0.7778$ to $0.3806$ F1). By dynamically scaling the per-class quota via $k_{\text{dyn}} = \lfloor M/K \rfloor$, Dynamic Replay re-establishes parity at decision splits, slashing maximum forgetting by $20.0\text{--}35.9\%$ across all volumetric families, preserving $>96.7\%$ memory savings, and executing updates in under $0.09\text{ seconds}$.
+
+\section{Correctness and Verification of the Experimental Pipeline}
+\label{sec:verification}
+
+To guarantee that the reported empirical gains reflect genuine algorithmic capabilities rather than data leakage or methodological artefacts, the codebase underwent rigorous verification across data hygiene, learning pipeline execution, and metric computation. Table~\ref{tab:verification_checklist} summarizes the twelve verification controls executed across the research.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Systematic verification checklist for data integrity, execution pipeline, and metric correctness}
+\label{tab:verification_checklist}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|p{3.4cm}|p{4.2cm}|p{3.8cm}|p{1.8cm}|}
+\hline
+\textbf{Verification Dimension} & \textbf{Audit Procedure} & \textbf{Observed Outcome} & \textbf{Audit Status} \\ \hline
+\textbf{Target Leakage Control} & Removal of binary \texttt{label}, \texttt{src\_ip}, and \texttt{dst\_ip} prior to encoding & Identifiers strictly absent from all feature matrices & Verified \\ \hline
+\textbf{Exact Row Deduplication} & Elimination of duplicate rows before partitioning & $27{,}451$ duplicates removed; $183{,}592$ clean rows retained & Verified \\ \hline
+\textbf{Train--Test Isolation} & 64-bit object hash collision audit on encoded partitions & Only $26$ of $54{,}766$ test rows ($0.05\%$) collided & Verified \\ \hline
+\textbf{Train-Only Preprocessing} & Median/mode imputation and one-hot encoders fitted strictly on $\mathcal{D}_{\text{train}}$ & Zero test or unseen statistics propagated to training & Verified \\ \hline
+\textbf{Closed-World Assertion} & Programmatic assertion verifying $c_{\text{unseen}} \notin \mathcal{E}_{\text{lbl}}.\text{classes\_}$ & No execution halted; closed-world boundary preserved & Verified \\ \hline
+\textbf{Deterministic Partitions} & Fixed random seed ($42$) and stratified class splits & $100\%$ bitwise reproducible results across all runs & Verified \\ \hline
+\textbf{Single-Class Collapse Control} & Baseline model retrained on novel batch alone ($\mathcal{D}_{\text{new}}$) & Trees collapsed to single class; $\mathcal{F}_{\max} = 0.9996$ & As Expected \\ \hline
+\textbf{Zero-Forgetting Upper Bound} & Full historical retraining control experiment & $|\mathcal{F}_{\text{avg}}| \le 0.0024$ across all attack runs & As Expected \\ \hline
+\textbf{Algorithmic Floor Equivalence} & Dynamic Replay evaluated on rare MITM ($k_{\text{dyn}} = 100$) & Identical F1 and forgetting to static $k=100$ & Verified \\ \hline
+\textbf{Monotonic Sensitivity Trends} & Parametric buffer sweep across $k \in \{25, 50, 100, 200, 500\}$ & Strict monotonic decay in forgetting and training time & Verified \\ \hline
+\textbf{Metric Manual Re-Derivation} & Hand computation of F1 from raw confusion matrix cells & Manual DoS F1 ($0.9411$) matched automated log & Verified \\ \hline
+\textbf{Evaluation Split Hygiene} & Strict 20/80 adaptation/evaluation partition of novel flows & Zero overlap between adaptation and scoring sets & Verified \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Threats to Validity}
+While the empirical results demonstrate robust statistical patterns, three methodological boundaries must be acknowledged:
 \begin{enumerate}
-    \item \textbf{Validation of the Zero-Day Blindness:} Conventional supervised tree ensembles fail completely ($F1 = 0.000$) when deployed against unobserved attack vectors, validating the theoretical detection deficit and underscoring the urgent necessity of lifelong learning in network security.
-    \item \textbf{Debunking the Full Retraining Ceiling:} Full joint retraining—traditionally considered the optimal upper bound in continual learning—was shown to suffer from severe class imbalance when assimilating compact zero-day attacks, achieving an F1-score of only $0.6483$ on novel MITM traffic. By contrast, our resource-efficient replay framework achieved an F1-score of $0.9773$, demonstrating that balanced historical rehearsal is fundamentally superior to brute-force retraining.
-    \item \textbf{Uncovering the Volumetric Flaw of Static Buffers:} While a fixed static replay buffer ($k=100$ samples/class) provides near-perfect storage reduction ($>99.2\%$), it is acutely vulnerable to high-volume attacks (e.g., XSS and Backdoor). When novel attack volume substantially exceeds buffer capacity, maximum catastrophic forgetting spikes to nearly $40\%$.
-    \item \textbf{Empirical Triumph of Dynamic Allocation:} Our proposed volume-aware allocation rule, $k_{dynamic} = \max(k_{min}, \lfloor M / K \rfloor)$, dynamically neutralizes class imbalance during tree splitting, slashing maximum catastrophic forgetting by $35.8\%$ while sustaining extreme memory reductions ($96.8\%$ to $99.3\%$) and sub-0.085 second execution latencies.
+    \item \textbf{Single-Benchmark Scope:} All experiments were conducted on the TON\_IoT network benchmark. Although TON\_IoT represents a modern, highly regarded testbed incorporating heterogeneous IoT protocols, evaluating cross-dataset transferability on corpora such as Edge-IIoTset remains essential.
+    \item \textbf{Single-Step vs.\ Multi-Step Continual Learning:} Experiments evaluated a single incremental adaptation step ($K \to K+1$). In production networks, gateways encounter sequential streams of novel threats ($K \to K+2 \to K+N$).
+    \item \textbf{Hardware Execution Environment:} Wall-clock latencies were benchmarked on a standard modern CPU. While relative speedups ($8\times\text{--}14\times$) remain invariant, absolute execution times on low-power ARM microcontrollers will scale proportionally.
 \end{enumerate}
 
-\section{Research Questions Revisited}
-The thesis systematically answered the five foundational research questions posed in Chapter~\ref{chap:introduction}:
-\begin{itemize}
-    \item \textbf{Answer to RQ1 (Supervised Failure Mode):} Supervised Random Forests achieve an exact $0.000$ detection F1-score on held-out attack classes, confirming that closed-world models are fundamentally incapable of recognizing zero-day threats without continual adaptation.
-    \item \textbf{Answer to RQ2 (Anomaly Detection Utility):} Isolation Forests effectively flag out-of-distribution traffic with linear computational complexity, but attain modest recall ($18.86\%$ on MITM) and high false alarm rates, confirming their utility strictly as front-end screening filters rather than standalone classifiers.
-    \item \textbf{Answer to RQ3 (Replay Memory Sensitivity):} Empirical sensitivity analysis established that a minimal buffer floor of $k=100$ samples per class ($900$ samples total) provides the optimal Pareto balance, reducing average forgetting by over $58\%$ relative to ultra-small buffers ($k=25$).
-    \item \textbf{Answer to RQ4 (Volumetric Attack Dynamics):} Static buffers fail under volumetric attacks because decision tree split optimization greedily minimizes overall impurity, allowing massive incoming novel classes to overwrite internal feature splits corresponding to minority historical classes.
-    \item \textbf{Answer to RQ5 (Dynamic Allocation Efficacy):} Dynamically scaling replay quotas proportionally to incoming novelty volume restores class parity during tree induction, successfully capping maximum forgetting below $0.25$ across all evaluated high-volume attack vectors.
-\end{itemize}
+\section{Practical Guidance for Edge Gateway Deployment}
+\label{sec:deployment_guidance}
 
-\section{Validation of Research Hypotheses}
-The empirical results provide unequivocal validation for all four stated research hypotheses:
-\begin{itemize}
-    \item \textbf{Hypothesis H1 (Confirmed):} Baseline closed-world models yielded $F1 = 0.0000$ on all unobserved attack vectors.
-    \item \textbf{Hypothesis H2 (Confirmed):} Isolation Forest provided zero-day screening alerts but exhibited insufficient recall ($18.86\%$) for standalone deployment.
-    \item \textbf{Hypothesis H3 (Confirmed):} Memory overhead was reduced by $99.3\%$ without causing catastrophic legacy forgetting when maintaining a 100-sample/class floor.
-    \item \textbf{Hypothesis H4 (Confirmed):} Volume-aware dynamic allocation structurally suppressed maximum forgetting spikes on volumetric attacks by $35.8\%$ relative to fixed static buffers.
-\end{itemize}
+For network engineers and security architects seeking to deploy continual intrusion detection on edge routers, Table~\ref{tab:deployment_guidance} translates our empirical findings into concrete parameter recommendations.
 
-\section{Limitations of the Present Work}
-While demonstrating decisive improvements, several limitations characterize the present study:
-\begin{enumerate}
-    \item \textbf{Dataset Scope:} Evaluation was conducted primarily on the TON\_IoT benchmark. While highly representative of modern IoT telemetry, cross-dataset validation across other benchmarks (e.g., CIC-IoT-2023, Edge-IIoTset) would provide additional empirical generalization.
-    \item \textbf{Uniform Exemplar Selection:} The dynamic allocation rule currently selects historical exemplars via stratified random sampling. While statistically sound, uniform sampling does not prioritize boundary-critical samples near decision margins.
-    \item \textbf{Labeling Latency Assumption:} The pipeline assumes that out-of-distribution traffic flagged by Stage 1 is verified and assigned ground-truth labels by network telemetry or analysts prior to Stage 2 adaptation. In fully autonomous autonomous deployments, active learning or few-shot clustering would be required to minimize human labeling overhead.
-\end{enumerate}
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.25}
+\caption{Recommended deployment configuration for continual NIDS on IoT edge gateways}
+\label{tab:deployment_guidance}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{|p{3.6cm}|p{3.6cm}|p{6.4cm}|}
+\hline
+\textbf{Configuration Parameter} & \textbf{Recommended Setting} & \textbf{Empirical Justification from Findings} \\ \hline
+\textbf{Per-Class Floor ($k_{\min}$)} & $100$ historical exemplars & Empirical Pareto knee: captures $97.73\%$ F1 on rare threats with minimal memory. \\ \hline
+\textbf{Total Buffer Cap ($B_{\max}$)} & $5{,}000$ flows ($960\text{ KB}$) & Enforces strict sub-megabyte memory ceiling compliant with low-cost gateway SRAM. \\ \hline
+\textbf{Dynamic Quota Rule} & $k_{\text{dyn}} = \lfloor M/K \rfloor$ within bounds & Maintains sample parity ($\rho \approx 1.0$), suppressing volumetric forgetting spikes by up to $36\%$. \\ \hline
+\textbf{Base Classifier Ensemble} & Random Forest ($B=100, d_{\max}=20$) & Fast CPU inference, invariance to monotonic feature scaling, sub-$0.1\text{ s}$ retraining latency. \\ \hline
+\textbf{Novelty Screener} & Isolation Forest ($B=100, \psi=256$) & Provides $7\times$ novelty enrichment without requiring cloud connectivity or labeled training. \\ \hline
+\textbf{Adaptation Batch Threshold} & $M \ge 200$ confirmed flows & Prevents training on stochastic noise; $207$ flows proved sufficient for $0.9773$ F1. \\ \hline
+\textbf{Operational Health Metric} & Worst-case per-class F1 ($\mathcal{F}_{\max}$) & Avoids aggregate metric masking; immediately detects severe degradation of minority classes. \\ \hline
+\end{tabular}%
+}
+\end{table}
 
-\section{Future Research Directions}
-Several promising avenues for extending this research include:
-\begin{enumerate}
-    \item \textbf{Coreset and Boundary-Aware Exemplar Selection:} Integrating geometric coreset selection or uncertainty-based margin sampling to populate the dynamic replay buffer with hard boundary exemplars, further pushing catastrophic forgetting toward zero.
-    \item \textbf{Federated Continual Learning across Edge Swarms:} Extending the dynamic replay mechanism to distributed federated architectures, enabling multiple IoT edge nodes to share localized threat exemplars without transmitting raw sensory telemetry over the network.
-    \item \textbf{Hardware Acceleration on Edge Microcontrollers:} Deploying and profiling the continual learning engine on physical bare-metal microcontrollers (e.g., ARM Cortex-M, ESP32, RISC-V edge cores) to evaluate hardware energy dissipation and battery longevity under sustained zero-day attack campaigns.
-\end{enumerate}
+\section{Future Enhancements}
+\label{sec:future_enhancement}
+
+Building upon the theoretical and empirical foundations established in this thesis, five key directions are identified for future exploration:
+
+\subsection{Sequential Multi-Class Incremental Learning ($K \to K+N$)}
+In long-term deployments, gateways must assimilate multiple novel attack families arriving sequentially over months or years. Future work should investigate dynamic buffer pruning mechanisms (such as reservoir sampling or class-aging decay) to manage the global buffer ceiling $B_{\max}$ when the number of supported classes $K$ expands continuously.
+
+\subsection{Asymmetric Minority-Aware Buffer Allocation}
+In our volumetric experiments, the worst-case forgetting consistently afflicted MITM because of its small natural support. Developing an asymmetric allocation policy that assigns higher exemplar quotas to historically rare or overlapping classes could eliminate the remaining $0.22\text{--}0.25$ forgetting margin observed on minority classes.
+
+\subsection{Semi-Supervised Active Learning and Analyst Assistance}
+To minimize human analyst labeling overhead in Stage~2, active learning frameworks combining density-based clustering (e.g., HDBSCAN) with label propagation can be integrated. Analysts would only need to label cluster medoids, with automated propagation labeling the remainder of the adaptation batch.
+
+\subsection{Hardware-in-the-Loop Embedded Prototyping}
+Porting the framework to embedded IoT gateway platforms (such as Raspberry Pi 4, NVIDIA Jetson Nano, or ARM Cortex-A industrial routers) using lightweight runtime engines (such as ONNX Runtime or Treelite C-code compilation) will provide direct measurements of microsecond inference latency, cache utilization, and milliwatt power consumption.
+
+\subsection{Cross-Dataset and Cross-Testbed Benchmarking}
+Extending evaluation across complementary IoT benchmarks, including Edge-IIoTset and CIC-IoT-2023, will benchmark framework robustness across diverse industrial protocols (Modbus, MQTT, CoAP) and varying network topologies.
+
+\vspace{0.5cm}
+In conclusion, this research demonstrates that maintaining robust, lifelong network defense on constrained IoT gateways does not require hoarding massive historical datasets or executing computationally prohibitive retraining cycles. Rather, effective continual intrusion detection is achieved through intelligent, volume-aware memory management. By pairing lightweight unsupervised anomaly screening with a volume-matched Dynamic Replay rule, edge devices can autonomously adapt to unobserved cyber threats in fractions of a second, preserving sub-megabyte memory budgets while safeguarding previously mastered defenses.
